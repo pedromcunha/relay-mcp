@@ -2,6 +2,8 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server for [Relay Protocol](https://relay.link) — cross-chain bridge and swap tools for AI agents.
 
+[![Install in Cursor](https://cursor.directory/deeplink?type=mcp&url=https://github.com/reservoirprotocol/relay-mcp)](https://cursor.directory/mcp/install?url=https://github.com/reservoirprotocol/relay-mcp)
+
 ## Tools
 
 | Tool | Description |
@@ -18,6 +20,23 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server for [Relay Pr
 ## Usage
 
 ### Claude Desktop / Claude Code
+
+Add to your `claude_desktop_config.json` or `.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "relay": {
+      "command": "npx",
+      "args": ["-y", "@relayprotocol/relay-mcp"]
+    }
+  }
+}
+```
+
+### Cursor
+
+Add to `.cursor/mcp.json`:
 
 ```json
 {

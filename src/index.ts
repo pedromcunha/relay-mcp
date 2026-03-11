@@ -10,19 +10,33 @@ import { register as registerGetTransactionStatus } from "./tools/get-transactio
 import { register as registerGetTransactionHistory } from "./tools/get-transaction-history.js";
 import { register as registerGetRelayAppUrl } from "./tools/get-relay-app-url.js";
 
-const server = new McpServer({
-  name: "relay-mcp",
-  version: "0.1.0",
-});
+function createServer() {
+  const server = new McpServer({
+    name: "relay-mcp",
+    version: "0.1.1",
+  });
 
-registerGetSupportedChains(server);
-registerGetSupportedTokens(server);
-registerGetBridgeQuote(server);
-registerGetSwapQuote(server);
-registerEstimateFees(server);
-registerGetTransactionStatus(server);
-registerGetTransactionHistory(server);
-registerGetRelayAppUrl(server);
+  registerGetSupportedChains(server);
+  registerGetSupportedTokens(server);
+  registerGetBridgeQuote(server);
+  registerGetSwapQuote(server);
+  registerEstimateFees(server);
+  registerGetTransactionStatus(server);
+  registerGetTransactionHistory(server);
+  registerGetRelayAppUrl(server);
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+  return server;
+}
+
+// Smithery sandbox export for tool scanning
+export function createSandboxServer() {
+  return createServer();
+}
+
+async function main() {
+  const server = createServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main();
