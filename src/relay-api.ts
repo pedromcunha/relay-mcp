@@ -137,40 +137,89 @@ export interface FeeEntry {
     decimals: number;
     address: string;
     chainId: number;
+    name?: string;
+    metadata?: Record<string, unknown>;
   };
   amount: string;
   amountFormatted: string;
   amountUsd: string;
+  minimumAmount?: string;
+}
+
+export interface QuoteStepItemData {
+  from: string;
+  to: string;
+  data: string;
+  value: string;
+  chainId: number;
+  gas?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
+}
+
+export interface QuoteStepCheck {
+  endpoint: string;
+  method: string;
+  body?: Record<string, unknown>;
+}
+
+export interface QuoteStep {
+  id: string;
+  action: string;
+  description: string;
+  kind: string;
+  requestId?: string;
+  depositAddress?: string;
+  items: Array<{
+    status: string;
+    data: QuoteStepItemData;
+    check?: QuoteStepCheck;
+  }>;
+}
+
+export interface QuoteCurrencyDetail {
+  currency: {
+    symbol: string;
+    decimals: number;
+    chainId: number;
+    address?: string;
+    name?: string;
+  };
+  amount: string;
+  amountFormatted: string;
+  amountUsd: string;
+  minimumAmount?: string;
 }
 
 export interface QuoteResponse {
+  steps: QuoteStep[];
   fees: {
     gas: FeeEntry;
     relayer: FeeEntry;
     relayerGas: FeeEntry;
     relayerService: FeeEntry;
     app: FeeEntry;
+    subsidized?: FeeEntry;
   };
   details: {
     operation: string;
     sender: string;
     recipient: string;
-    currencyIn: {
-      currency: { symbol: string; decimals: number; chainId: number };
-      amount: string;
-      amountFormatted: string;
-      amountUsd: string;
-    };
-    currencyOut: {
-      currency: { symbol: string; decimals: number; chainId: number };
-      amount: string;
-      amountFormatted: string;
-      amountUsd: string;
-    };
+    currencyIn: QuoteCurrencyDetail;
+    currencyOut: QuoteCurrencyDetail;
     totalImpact: { usd: string; percent: string };
     rate: string;
     timeEstimate: number;
+    slippageTolerance?: {
+      origin?: { usd: string; value: string; percent: string };
+      destination?: { usd: string; value: string; percent: string };
+    };
+    swapImpact?: { usd: string; percent: string };
+    refundCurrency?: QuoteCurrencyDetail;
+    route?: Record<string, unknown>;
+    isFixedRate?: boolean;
   };
+  protocol?: Record<string, unknown>;
 }
 
 export async function getQuote(params: QuoteRequest): Promise<QuoteResponse> {
@@ -189,7 +238,7 @@ export interface IntentStatus {
   txHashes?: string[];
   originChainId?: number;
   destinationChainId?: number;
-  updatedAt?: string;
+  updatedAt?: number;
 }
 
 export async function getIntentStatus(
@@ -271,14 +320,18 @@ export interface LiquidityEntry {
   decimals: number;
   balance: string;
   amountUsd: string;
+  chainId?: number;
+  currencyId?: string;
 }
 
 export async function getChainLiquidity(
   chainId: number
 ): Promise<LiquidityEntry[]> {
-  return relayApi<LiquidityEntry[]>("/chains/liquidity", {
+  // API returns { liquidity: [...] } — unwrap here so callers get a clean array.
+  const resp = await relayApi<{ liquidity: LiquidityEntry[] }>("/chains/liquidity", {
     params: { chainId: String(chainId) },
   });
+  return resp.liquidity;
 }
 
 export interface RouteConfig {
@@ -319,9 +372,11 @@ export interface TokenDetails {
   decimals: number;
   price?: number;
   marketCap?: number;
-  fullyDilutedValuation?: number;
+  fdv?: number;
   liquidity?: number;
-  volume24h?: number;
+  volume?: { "24h"?: { usd?: number } };
+  priceChange?: Record<string, { percent?: number }>;
+  createdAt?: string;
   [key: string]: unknown;
 }
 
@@ -338,7 +393,7 @@ export interface TokenChart {
   h: number[];
   l: number[];
   c: number[];
-  volume: number[];
+  volume: (string | number)[];
   [key: string]: unknown;
 }
 
@@ -358,6 +413,7 @@ export interface TrendingToken {
   name: string;
   decimals: number;
   vmType?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export async function getTrendingTokens(): Promise<TrendingToken[]> {
@@ -365,7 +421,9 @@ export async function getTrendingTokens(): Promise<TrendingToken[]> {
 }
 
 export async function getSwapSources(): Promise<string[]> {
-  return relayApi<string[]>("/swap-sources");
+  // API returns { sources: [...] } — unwrap here so callers get a clean array.
+  const resp = await relayApi<{ sources: string[] }>("/swap-sources");
+  return resp.sources;
 }
 
 export interface AppFeeBalance {

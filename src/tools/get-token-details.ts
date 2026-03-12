@@ -18,7 +18,9 @@ import { mcpCatchError } from "../utils/errors.js";
 function slimChart(raw: TokenChart) {
   const timestamps = raw.t || [];
   const closes = raw.c || [];
-  const volumes = raw.volume || [];
+  // Volume may come as string[] from API — coerce to numbers for stats
+  const rawVolumes = raw.volume || [];
+  const volumes = rawVolumes.map((v) => (typeof v === "string" ? parseFloat(v) || 0 : v));
 
   // Compute summary stats from close prices
   const validCloses = closes.filter((v) => typeof v === "number" && !isNaN(v));
@@ -110,6 +112,7 @@ When includeChart is true, returns a slimmed price chart (~50 data points with c
       }
 
       // Slim the details to most useful fields
+      const volume24h = details.volume?.["24h"]?.usd;
       const slim: Record<string, unknown> = {
         chainId: resolvedChainId,
         address,
@@ -118,10 +121,13 @@ When includeChart is true, returns a slimmed price chart (~50 data points with c
         decimals: details.decimals,
         price: details.price,
         marketCap: details.marketCap,
-        fullyDilutedValuation: details.fullyDilutedValuation,
+        fdv: details.fdv,
         liquidity: details.liquidity,
-        volume24h: details.volume24h,
+        volume24h,
       };
+      if (details.priceChange) {
+        slim.priceChange = details.priceChange;
+      }
       if (chart) {
         slim.chart = chart;
       }

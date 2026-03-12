@@ -18,6 +18,8 @@ export function register(server: McpServer) {
 
 Use this for same-token cross-chain transfers. For different tokens (same or cross-chain), use get_swap_quote instead.
 
+Returns execution steps — each step contains ready-to-sign transaction data (to, data, value, chainId, gas). An agent with wallet tooling can sign and submit these directly. Also returns a relay.link deep link as a fallback for manual execution.
+
 Amounts must be in wei (smallest unit). Use get_supported_tokens to look up token decimals first. Examples: 1 USDC = "1000000" (6 decimals), 1 ETH = "1000000000000000000" (18 decimals).
 
 Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
@@ -97,7 +99,7 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
         return mcpCatchError(err);
       }
 
-      const { details, fees } = quote;
+      const { steps, details, fees } = quote;
       const summary = `Bridge ${details.currencyIn.amountFormatted} ${details.currencyIn.currency.symbol} (chain ${resolvedOrigin}) → ${details.currencyOut.amountFormatted} ${details.currencyOut.currency.symbol} (chain ${resolvedDest}). Total fees: $${fees.relayer.amountUsd}. ETA: ~${details.timeEstimate}s.`;
 
       const deeplinkUrl = await buildRelayAppUrl({
@@ -141,6 +143,7 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
               totalImpact: details.totalImpact,
               timeEstimateSeconds: details.timeEstimate,
               rate: details.rate,
+              steps,
               relayAppUrl: deeplinkUrl ?? undefined,
             },
             null,

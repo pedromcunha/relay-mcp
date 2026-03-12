@@ -115,7 +115,39 @@ function captureToolHandler(
 
 const VALID_ADDRESS = "0x0000000000000000000000000000000000000000";
 const SENDER = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+const MOCK_STEPS = [
+  {
+    id: "deposit",
+    action: "Confirm transaction in your wallet",
+    description: "Deposit ETH into the Relay contract",
+    kind: "transaction",
+    requestId: "0xabc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+    depositAddress: "0x1234567890123456789012345678901234567890",
+    items: [
+      {
+        status: "incomplete",
+        data: {
+          from: SENDER,
+          to: "0xa5f565650890fba1824ee0f21ebbbf660a179934",
+          data: "0xdeadbeef",
+          value: "1000000000000000000",
+          chainId: 1,
+          gas: "50000",
+          maxFeePerGas: "30000000000",
+          maxPriorityFeePerGas: "1000000000",
+        },
+        check: {
+          endpoint: "/intents/status/v3",
+          method: "GET",
+          body: { requestId: "0xabc123def456abc123def456abc123def456abc123def456abc123def456abc1" },
+        },
+      },
+    ],
+  },
+];
+
 const MOCK_QUOTE = {
+  steps: MOCK_STEPS,
   details: {
     operation: "bridge",
     sender: SENDER,
@@ -332,6 +364,38 @@ describe("get_bridge_quote", () => {
     expect(resourceLink.uri).toContain("relay.link");
   });
 
+  it("includes execution steps with transaction data and requestId", async () => {
+    const result = await handler({
+      originChainId: "ethereum",
+      destinationChainId: "base",
+      currency: VALID_ADDRESS,
+      amount: "1000000000000000000",
+      sender: SENDER,
+    });
+
+    const data = JSON.parse(result.content[1].text);
+    expect(data.steps).toBeDefined();
+    expect(data.steps).toHaveLength(1);
+
+    const step = data.steps[0];
+    expect(step.id).toBe("deposit");
+    expect(step.kind).toBe("transaction");
+    expect(step.requestId).toMatch(/^0x[a-f0-9]{64}$/);
+
+    // Transaction data should be ready-to-sign
+    const txData = step.items[0].data;
+    expect(txData.from).toBe(SENDER);
+    expect(txData.to).toBeDefined();
+    expect(txData.data).toBeDefined();
+    expect(txData.value).toBeDefined();
+    expect(txData.chainId).toBe(1);
+
+    // Check endpoint for tracking fill status
+    const check = step.items[0].check;
+    expect(check.endpoint).toBe("/intents/status/v3");
+    expect(check.method).toBe("GET");
+  });
+
   it("omits deeplink when buildRelayAppUrl returns null", async () => {
     vi.mocked(buildRelayAppUrl).mockResolvedValueOnce(null);
 
@@ -419,6 +483,34 @@ describe("get_swap_quote", () => {
     });
 
     expect(result.isError).toBe(true);
+  });
+
+  it("includes execution steps with transaction data and requestId", async () => {
+    const result = await handler({
+      originChainId: "ethereum",
+      destinationChainId: "base",
+      originCurrency: VALID_ADDRESS,
+      destinationCurrency: VALID_ADDRESS,
+      amount: "1000000000000000000",
+      sender: SENDER,
+    });
+
+    const data = JSON.parse(result.content[1].text);
+    expect(data.steps).toBeDefined();
+    expect(data.steps).toHaveLength(1);
+
+    const step = data.steps[0];
+    expect(step.id).toBe("deposit");
+    expect(step.kind).toBe("transaction");
+    expect(step.requestId).toMatch(/^0x[a-f0-9]{64}$/);
+
+    // Transaction data should be ready-to-sign
+    const txData = step.items[0].data;
+    expect(txData.from).toBe(SENDER);
+    expect(txData.to).toBeDefined();
+    expect(txData.data).toBeDefined();
+    expect(txData.value).toBeDefined();
+    expect(txData.chainId).toBe(1);
   });
 });
 

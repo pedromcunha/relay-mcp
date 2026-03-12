@@ -47,34 +47,30 @@ If a chain is unhealthy or has low liquidity, bridging may fail or be slow.`,
       }
 
       // Fetch health + liquidity in parallel, optionally route config
-      const promises: [
-        Promise<{ healthy: boolean }>,
-        Promise<unknown[]>,
-        Promise<unknown> | Promise<null>,
-      ] = [
-        getChainHealth(resolvedChainId),
-        getChainLiquidity(resolvedChainId),
-        resolvedDestId !== undefined
-          ? getRouteConfig(resolvedChainId, resolvedDestId)
-          : Promise.resolve(null),
-      ];
-
-      let health, liquidity, routeConfig;
+      let health: Awaited<ReturnType<typeof getChainHealth>>;
+      let liquidity: Awaited<ReturnType<typeof getChainLiquidity>>;
+      let routeConfig: Awaited<ReturnType<typeof getRouteConfig>> | null;
       try {
-        [health, liquidity, routeConfig] = await Promise.all(promises);
+        [health, liquidity, routeConfig] = await Promise.all([
+          getChainHealth(resolvedChainId),
+          getChainLiquidity(resolvedChainId),
+          resolvedDestId !== undefined
+            ? getRouteConfig(resolvedChainId, resolvedDestId)
+            : Promise.resolve(null),
+        ]);
       } catch (err) {
         return mcpCatchError(err);
       }
 
       // Slim liquidity to essentials
-      const slimLiquidity = (liquidity as any[]).map((entry: any) => ({
+      const slimLiquidity = liquidity.map((entry) => ({
         symbol: entry.symbol,
         balance: entry.balance,
         amountUsd: entry.amountUsd,
       }));
 
       const totalLiquidityUsd = slimLiquidity.reduce(
-        (sum: number, e: any) => sum + (parseFloat(e.amountUsd) || 0),
+        (sum, e) => sum + (parseFloat(e.amountUsd) || 0),
         0
       );
 
@@ -82,8 +78,7 @@ If a chain is unhealthy or has low liquidity, bridging may fail or be slow.`,
       let summary = `Chain ${resolvedChainId}: ${healthEmoji} ${health.healthy ? "Healthy" : "Unhealthy"}. Solver liquidity: $${totalLiquidityUsd.toLocaleString()} across ${slimLiquidity.length} token${slimLiquidity.length !== 1 ? "s" : ""}.`;
 
       if (routeConfig && resolvedDestId !== undefined) {
-        const config = routeConfig as any;
-        const enabled = config.enabled !== false;
+        const enabled = routeConfig.enabled !== false;
         summary += ` Route to chain ${resolvedDestId}: ${enabled ? "enabled ✅" : "disabled ❌"}.`;
       }
 
