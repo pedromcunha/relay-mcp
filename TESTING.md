@@ -1,8 +1,8 @@
-# Testing Plan — relay-mcp v0.2.0
+# Testing Plan — relay-mcp v0.3.0
 
 ## Automated Tests
 
-### Unit Tests (133 tests, 5 suites)
+### Unit Tests (173 tests, 6 suites)
 
 ```bash
 npm run test
@@ -14,7 +14,7 @@ npm run test
 | `chain-resolver.test.ts` | 25 | Alias resolution, fuzzy matching (Dice coefficient), numeric passthrough, errors, caching |
 | `errors.test.ts` | 16 | Error categorization by HTTP status, `mcpCatchError()` return shape, network/timeout/auth/rate-limit buckets |
 | `deeplink.test.ts` | 11 | URL construction for bridge/swap deeplinks, chain name lookup, optional params, recipient handling |
-| `tools.test.ts` | 49 | Every tool handler happy path + error paths (mocked API). All 9 tools including `get_api_schema` and `get_transaction_status` txHash lookup |
+| `tools.test.ts` | 89 | Every tool handler happy path + error paths (mocked API). All 16 tools including `get_api_schema` and `get_transaction_status` txHash lookup |
 
 ### Integration Tests (14 tests, live API)
 
@@ -93,7 +93,7 @@ Test that transient failures don't permanently break the server:
 4. Call `get_supported_chains()` again — **should succeed** (not return cached rejection)
 5. Repeat with `get_api_schema()` to verify spec cache also resets
 
-Why: Fix 4 in the simplify review addressed permanent failure caching. This validates the `.catch(() => { cache = null })` pattern works end-to-end, not just in mocked tests.
+Why: Validates the `.catch(() => { cache = null })` pattern works end-to-end, not just in mocked tests.
 
 ### 4. Transaction History Pagination
 
