@@ -1,4 +1,5 @@
 const BASE_URL = process.env.RELAY_API_URL || "https://api.relay.link";
+const REQUEST_TIMEOUT_MS = 30_000;
 
 interface RequestOptions {
   method?: "GET" | "POST";
@@ -28,11 +29,25 @@ export async function relayApi<T>(
     headers["x-api-key"] = apiKey;
   }
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err: unknown) {
+    clearTimeout(timer);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Relay API ${method} ${path} timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  }
+  clearTimeout(timer);
 
   if (!res.ok) {
     const text = await res.text();
@@ -484,7 +499,19 @@ export function getOpenApiSpec(): Promise<any> {
   if (specCachePromise) return specCachePromise;
   specCachePromise = (async () => {
     const url = `${BASE_URL}/documentation/json`;
-    const res = await fetch(url);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, { signal: controller.signal });
+    } catch (err: unknown) {
+      clearTimeout(timer);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`OpenAPI spec fetch timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+      }
+      throw err;
+    }
+    clearTimeout(timer);
     if (!res.ok) {
       throw new Error(`Failed to fetch OpenAPI spec (${res.status})`);
     }

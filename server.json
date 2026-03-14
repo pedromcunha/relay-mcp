@@ -8,6 +8,26 @@
     "url": "https://github.com/reservoirprotocol/relay-mcp",
     "source": "github"
   },
+  "icons": [
+    {
+      "src": "https://docs.relay.link/favicon.png",
+      "mimeType": "image/png",
+      "sizes": ["32x32"],
+      "theme": "dark"
+    },
+    {
+      "src": "https://docs.relay.link/logo/relay-black.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"],
+      "theme": "light"
+    },
+    {
+      "src": "https://docs.relay.link/logo/relay-white.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"],
+      "theme": "dark"
+    }
+  ],
   "version": "0.3.0",
   "packages": [
     {

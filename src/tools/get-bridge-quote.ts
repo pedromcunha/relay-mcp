@@ -51,6 +51,13 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
         .describe(
           "Recipient wallet address. Defaults to sender if not provided."
         ),
+      includeSteps: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          "Include raw transaction steps for signing. Only needed if you have wallet tooling to submit transactions directly. Omit to save tokens."
+        ),
     },
     async ({
       originChainId,
@@ -59,6 +66,7 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
       amount,
       sender,
       recipient,
+      includeSteps,
     }) => {
       // Validate inputs
       const addrErr = validateAddresses(
@@ -143,7 +151,7 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
               totalImpact: details.totalImpact,
               timeEstimateSeconds: details.timeEstimate,
               rate: details.rate,
-              steps,
+              ...(includeSteps ? { steps } : { stepsCount: steps.length }),
               relayAppUrl: deeplinkUrl ?? undefined,
             },
             null,

@@ -29,7 +29,12 @@ Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lam
       amount: z
         .string()
         .describe("Amount in the origin token's smallest unit."),
-      sender: z.string().describe("Sender wallet address."),
+      sender: z
+        .string()
+        .optional()
+        .describe(
+          "Sender wallet address. Optional — defaults to a zero address for estimation purposes."
+        ),
     },
     async ({
       originChainId,
@@ -39,12 +44,16 @@ Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lam
       amount,
       sender,
     }) => {
+      const effectiveSender =
+        sender || "0x0000000000000000000000000000000000000001";
+
       // Validate inputs
-      const addrErr = validateAddresses(
-        [sender, "sender"],
+      const addrValidations: [string, string][] = [
         [originCurrency, "originCurrency"],
         [destinationCurrency, "destinationCurrency"],
-      );
+      ];
+      if (sender) addrValidations.push([sender, "sender"]);
+      const addrErr = validateAddresses(...addrValidations);
       if (addrErr) return addrErr;
       const amtErr = validateAmount(amount);
       if (amtErr) return validationError(amtErr);
@@ -63,7 +72,7 @@ Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lam
       let quote;
       try {
         quote = await getQuote({
-          user: sender,
+          user: effectiveSender,
           originChainId: resolvedOrigin,
           destinationChainId: resolvedDest,
           originCurrency,

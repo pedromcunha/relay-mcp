@@ -31,6 +31,26 @@ function createServer() {
   const server = new McpServer({
     name: "relay-mcp",
     version: "0.3.0",
+    icons: [
+      {
+        src: "https://docs.relay.link/favicon.png",
+        mimeType: "image/png",
+        sizes: ["32x32"],
+        theme: "dark",
+      },
+      {
+        src: "https://docs.relay.link/logo/relay-black.svg",
+        mimeType: "image/svg+xml",
+        sizes: ["any"],
+        theme: "light",
+      },
+      {
+        src: "https://docs.relay.link/logo/relay-white.svg",
+        mimeType: "image/svg+xml",
+        sizes: ["any"],
+        theme: "dark",
+      },
+    ],
   });
 
   // Core tools (v0.2.0)
