@@ -16,10 +16,8 @@ export function validateAddress(
   value: string,
   paramName = "address"
 ): ValidationError | null {
-  // EVM: 0x-prefixed, 40 hex chars
-  if (/^0x[0-9a-fA-F]{40}$/.test(value)) return null;
-  // HypeVM (Hyperliquid): 0x-prefixed, 32 hex chars
-  if (/^0x[0-9a-fA-F]{32}$/.test(value)) return null;
+  // EVM / HypeVM / any 0x-prefixed hex address (covers 32, 38, 40 char variants)
+  if (/^0x[0-9a-fA-F]{1,64}$/.test(value)) return null;
   // Lighter (LVM): small numeric token IDs ("0", "1", "3", etc.)
   if (/^\d{1,3}$/.test(value)) return null;
   // Solana (SVM): base58, 32–44 chars
@@ -32,7 +30,7 @@ export function validateAddress(
   return {
     param: paramName,
     value,
-    message: "Invalid address format. Supported: EVM (0x + 40 hex), HypeVM (0x + 32 hex), Lighter (numeric ID), Solana (base58), Bitcoin (bc1.../1.../3...), Tron (T...)",
+    message: "Invalid address format. Supported: 0x-prefixed hex (EVM, HypeVM), Lighter (numeric ID), Solana (base58), Bitcoin (bc1.../1.../3...), Tron (T...)",
   };
 }
 
