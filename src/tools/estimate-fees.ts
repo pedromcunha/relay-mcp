@@ -16,16 +16,16 @@ export function register(server: McpServer) {
 
 Use this for comparing route costs or showing users expected fees. For standalone token pricing (not route-specific), use get_token_price instead.
 
-Amounts must be in wei (smallest unit). Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
+Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lamports for SOL). Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 'solana').`,
     {
       originChainId: z.union([z.number(), z.string()]).describe("Source chain ID or name (e.g. 1, 'ethereum', 'eth')."),
       destinationChainId: z.union([z.number(), z.string()]).describe("Destination chain ID or name (e.g. 8453, 'base')."),
       originCurrency: z
         .string()
-        .describe('Origin token address. "0x0000000000000000000000000000000000000000" for native.'),
+        .describe('Origin token address. EVM native: "0x0000000000000000000000000000000000000000". Solana native: "11111111111111111111111111111111". Bitcoin native: "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8".'),
       destinationCurrency: z
         .string()
-        .describe('Destination token address. "0x0000000000000000000000000000000000000000" for native.'),
+        .describe('Destination token address. EVM native: "0x0000000000000000000000000000000000000000". Solana native: "11111111111111111111111111111111". Bitcoin native: "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8".'),
       amount: z
         .string()
         .describe("Amount in the origin token's smallest unit."),

@@ -19,11 +19,11 @@ export function register(server: McpServer) {
       fromCurrency: z
         .string()
         .optional()
-        .describe('Origin token address. "0x0000000000000000000000000000000000000000" for native.'),
+        .describe('Origin token address. EVM native: "0x0000000000000000000000000000000000000000". Solana native: "11111111111111111111111111111111". Bitcoin native: "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8".'),
       toCurrency: z
         .string()
         .optional()
-        .describe('Destination token address. "0x0000000000000000000000000000000000000000" for native.'),
+        .describe('Destination token address. EVM native: "0x0000000000000000000000000000000000000000". Solana native: "11111111111111111111111111111111". Bitcoin native: "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8".'),
       amount: z
         .string()
         .optional()

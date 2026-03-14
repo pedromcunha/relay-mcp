@@ -20,9 +20,9 @@ Use this for same-token cross-chain transfers. For different tokens (same or cro
 
 Returns execution steps — each step contains ready-to-sign transaction data (to, data, value, chainId, gas). An agent with wallet tooling can sign and submit these directly. Also returns a relay.link deep link as a fallback for manual execution.
 
-Amounts must be in wei (smallest unit). Use get_supported_tokens to look up token decimals first. Examples: 1 USDC = "1000000" (6 decimals), 1 ETH = "1000000000000000000" (18 decimals).
+Amounts must be in the token's smallest unit. Use get_supported_tokens to look up decimals. Examples: 1 ETH = "1000000000000000000" (18 decimals), 1 USDC = "1000000" (6 decimals), 1 BTC = "100000000" (8 decimals, satoshis), 1 SOL = "1000000000" (9 decimals, lamports).
 
-Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
+Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 'solana').`,
     {
       originChainId: z
         .union([z.number(), z.string()])
@@ -37,12 +37,12 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
       currency: z
         .string()
         .describe(
-          'Token address to bridge. Use "0x0000000000000000000000000000000000000000" for native ETH on EVM chains. For Solana, use the base58 mint address.'
+          'Token address to bridge. EVM native: "0x0000000000000000000000000000000000000000". Solana native (SOL): "11111111111111111111111111111111". Bitcoin native (BTC): "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8". For other tokens, use the contract/mint address.'
         ),
       amount: z
         .string()
         .describe(
-          "Amount to bridge in the token's smallest unit (wei for ETH). Example: \"1000000000000000000\" for 1 ETH."
+          "Amount to bridge in the token's smallest unit. Examples: \"1000000000000000000\" for 1 ETH (18 decimals), \"100000000\" for 1 BTC (8 decimals)."
         ),
       sender: z.string().describe("Sender wallet address."),
       recipient: z

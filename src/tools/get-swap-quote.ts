@@ -20,9 +20,9 @@ Use when input and output tokens differ. Works same-chain and cross-chain. For s
 
 Returns execution steps — each step contains ready-to-sign transaction data (to, data, value, chainId, gas). An agent with wallet tooling can sign and submit these directly. Also returns a relay.link deep link as a fallback for manual execution.
 
-Amounts must be in wei (smallest unit). Use get_supported_tokens to look up token decimals first. Examples: 1 USDC = "1000000" (6 decimals), 1 ETH = "1000000000000000000" (18 decimals).
+Amounts must be in the token's smallest unit. Use get_supported_tokens to look up decimals. Examples: 1 ETH = "1000000000000000000" (18 decimals), 1 USDC = "1000000" (6 decimals), 1 BTC = "100000000" (8 decimals, satoshis), 1 SOL = "1000000000" (9 decimals, lamports).
 
-Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
+Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 'solana').`,
     {
       originChainId: z
         .union([z.number(), z.string()])
@@ -35,17 +35,17 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
       originCurrency: z
         .string()
         .describe(
-          'Token address to swap from. Use "0x0000000000000000000000000000000000000000" for native ETH on EVM chains. For Solana, use the base58 mint address.'
+          'Token address to swap from. EVM native: "0x0000000000000000000000000000000000000000". Solana native (SOL): "11111111111111111111111111111111". Bitcoin native (BTC): "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8". For other tokens, use the contract/mint address.'
         ),
       destinationCurrency: z
         .string()
         .describe(
-          'Token address to swap to. Use "0x0000000000000000000000000000000000000000" for native ETH on EVM chains. For Solana, use the base58 mint address.'
+          'Token address to swap to. EVM native: "0x0000000000000000000000000000000000000000". Solana native (SOL): "11111111111111111111111111111111". Bitcoin native (BTC): "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8". For other tokens, use the contract/mint address.'
         ),
       amount: z
         .string()
         .describe(
-          "Amount to swap in the origin token's smallest unit (wei for ETH)."
+          "Amount to swap in the origin token's smallest unit. Examples: wei for ETH (18 decimals), satoshis for BTC (8 decimals), lamports for SOL (9 decimals)."
         ),
       sender: z.string().describe("Sender wallet address."),
       recipient: z
