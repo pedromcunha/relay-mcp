@@ -1,5 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { randomUUID } from "node:crypto";
 
 // v0.2.0 tools
 import { register as registerGetSupportedChains } from "./tools/get-supported-chains.js";
@@ -56,9 +59,70 @@ export function createSandboxServer() {
 }
 
 async function main() {
-  const server = createServer();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  const mode = process.env.MCP_TRANSPORT || "stdio";
+
+  if (mode === "http") {
+    const port = parseInt(process.env.PORT || "3000", 10);
+    const app = createMcpExpressApp({ host: "0.0.0.0" });
+
+    // Track transports per session for cleanup
+    const transports = new Map<string, StreamableHTTPServerTransport>();
+
+    app.post("/mcp", async (req, res) => {
+      const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+      if (sessionId && transports.has(sessionId)) {
+        // Existing session
+        await transports.get(sessionId)!.handleRequest(req, res, req.body);
+      } else {
+        // New session — create server + transport
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+        });
+        transport.onclose = () => {
+          if (transport.sessionId) transports.delete(transport.sessionId);
+        };
+        const server = createServer();
+        await server.connect(transport);
+        if (transport.sessionId) transports.set(transport.sessionId, transport);
+        await transport.handleRequest(req, res, req.body);
+      }
+    });
+
+    app.get("/mcp", async (req, res) => {
+      const sessionId = req.headers["mcp-session-id"] as string | undefined;
+      if (sessionId && transports.has(sessionId)) {
+        await transports.get(sessionId)!.handleRequest(req, res);
+      } else {
+        res.status(400).json({ error: "No valid session. Send a POST to /mcp first." });
+      }
+    });
+
+    app.delete("/mcp", async (req, res) => {
+      const sessionId = req.headers["mcp-session-id"] as string | undefined;
+      if (sessionId && transports.has(sessionId)) {
+        await transports.get(sessionId)!.close();
+        transports.delete(sessionId);
+        res.status(200).json({ message: "Session closed" });
+      } else {
+        res.status(404).json({ error: "Session not found" });
+      }
+    });
+
+    // Health check
+    app.get("/health", (_req, res) => {
+      res.json({ status: "ok", tools: 16, version: "0.3.0", sessions: transports.size });
+    });
+
+    app.listen(port, "0.0.0.0", () => {
+      console.log(`Relay MCP server running on http://0.0.0.0:${port}/mcp`);
+    });
+  } else {
+    // Default: stdio mode for local use
+    const server = createServer();
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+  }
 }
 
 main();
