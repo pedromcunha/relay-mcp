@@ -56,13 +56,24 @@ function createServer() {
   // Resources
   server.resource("relay-docs", "relay://docs/llms.txt", {
     description:
-      "LLM-optimized Relay Protocol documentation — covers all API endpoints, SDK usage, chain support, and integration guides.",
+      "Relay Protocol documentation overview — API endpoints, chain support, and quick-start integration guide. Use this first for general context.",
     mimeType: "text/plain",
   }, async () => {
     const res = await fetch("https://docs.relay.link/llms.txt");
     if (!res.ok) throw new Error(`Failed to fetch llms.txt (${res.status})`);
     const text = await res.text();
     return { contents: [{ uri: "relay://docs/llms.txt", mimeType: "text/plain", text }] };
+  });
+
+  server.resource("relay-docs-full", "relay://docs/llms-full.txt", {
+    description:
+      "Comprehensive Relay Protocol documentation (~30K words) — deep coverage of deposit addresses, gasless execution, app fees, fee sponsorship, gas top-up, error handling, rate limits, and contract compatibility. Use when you need detailed feature docs beyond the overview.",
+    mimeType: "text/plain",
+  }, async () => {
+    const res = await fetch("https://docs.relay.link/llms-full.txt");
+    if (!res.ok) throw new Error(`Failed to fetch llms-full.txt (${res.status})`);
+    const text = await res.text();
+    return { contents: [{ uri: "relay://docs/llms-full.txt", mimeType: "text/plain", text }] };
   });
 
   // Core tools (v0.2.0)
