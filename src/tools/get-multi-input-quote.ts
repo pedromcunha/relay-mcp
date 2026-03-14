@@ -79,7 +79,7 @@ Amounts must be in each token's smallest unit. Chain IDs can be numbers (8453) o
       // Validate each origin
       for (let i = 0; i < origins.length; i++) {
         const amtErr = validateAmount(origins[i].amount);
-        if (amtErr) return validationError(`origins[${i}].amount: ${amtErr}`);
+        if (amtErr) return validationError({ ...amtErr, param: `origins[${i}].amount` });
       }
 
       // Resolve all chain IDs in parallel

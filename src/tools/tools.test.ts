@@ -32,6 +32,7 @@ vi.mock("../relay-api.js", () => ({
   getAppFeeBalances: vi.fn(),
   getAppFeeClaims: vi.fn(),
   indexTransaction: vi.fn(),
+  getRouteConfigWithUser: vi.fn(),
 }));
 
 vi.mock("../utils/chain-resolver.js", () => ({
@@ -68,6 +69,7 @@ import {
   getAppFeeBalances,
   getAppFeeClaims,
   indexTransaction,
+  getRouteConfigWithUser,
 } from "../relay-api.js";
 import { resolveChainId, getChainVmType } from "../utils/chain-resolver.js";
 import { resolveTokenAddress } from "../utils/token-resolver.js";
@@ -89,6 +91,7 @@ import { register as registerGetTrendingTokens } from "./get-trending-tokens.js"
 import { register as registerGetSwapSources } from "./get-swap-sources.js";
 import { register as registerGetAppFees } from "./get-app-fees.js";
 import { register as registerIndexTransaction } from "./index-transaction.js";
+import { register as registerGetUserBalance } from "./get-user-balance.js";
 
 // ─── Helper: extract the handler from McpServer ───────────────────
 
@@ -828,7 +831,9 @@ describe("get_transaction_history", () => {
   it("passes cursor to API for pagination", async () => {
     await handler({ user: SENDER, limit: 5, cursor: "page-2" });
 
-    expect(vi.mocked(getRequests)).toHaveBeenCalledWith(SENDER, 5, "page-2");
+    expect(vi.mocked(getRequests)).toHaveBeenCalledWith(
+      expect.objectContaining({ user: SENDER, limit: 5, continuation: "page-2" })
+    );
   });
 });
 
@@ -1510,5 +1515,95 @@ describe("index_transaction", () => {
     await handler({ chainId: 8453, txHash: VALID_TX_HASH });
 
     expect(vi.mocked(resolveChainId)).toHaveBeenCalledWith(8453);
+  });
+});
+
+// ─── get_user_balance ─────────────────────────────────────────────
+
+describe("get_user_balance", () => {
+  const handler = captureToolHandler(registerGetUserBalance);
+
+  const MOCK_BALANCE_CONFIG = {
+    enabled: true,
+    user: {
+      balance: "1500000000",
+      maxAmount: "1200000000",
+      currency: {
+        chainId: 1,
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+      },
+    },
+  };
+
+  beforeEach(() => {
+    vi.mocked(getRouteConfigWithUser).mockResolvedValue(MOCK_BALANCE_CONFIG);
+  });
+
+  it("returns user balance for a valid route", async () => {
+    const result = await handler({
+      user: SENDER,
+      originChainId: "ethereum",
+      destinationChainId: "base",
+      originCurrency: "USDC",
+      destinationCurrency: "USDC",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Balance: 1500000000 USDC");
+    expect(result.content[0].text).toContain("Max bridgeable: 1200000000 USDC");
+    const data = JSON.parse(result.content[1].text);
+    expect(data.balance).toBe("1500000000");
+    expect(data.maxBridgeableAmount).toBe("1200000000");
+    expect(data.routeEnabled).toBe(true);
+  });
+
+  it("rejects invalid user address", async () => {
+    const result = await handler({
+      user: "not-an-address",
+      originChainId: 1,
+      destinationChainId: 8453,
+      originCurrency: "USDC",
+      destinationCurrency: "USDC",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Validation error");
+  });
+
+  it("handles API error", async () => {
+    vi.mocked(getRouteConfigWithUser).mockRejectedValueOnce(
+      new Error("Relay API GET /config/v2 failed (500): internal error")
+    );
+
+    const result = await handler({
+      user: SENDER,
+      originChainId: 1,
+      destinationChainId: 8453,
+      originCurrency: "USDC",
+      destinationCurrency: "USDC",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("[server 500]");
+  });
+
+  it("handles missing balance data gracefully", async () => {
+    vi.mocked(getRouteConfigWithUser).mockResolvedValueOnce({
+      enabled: true,
+    });
+
+    const result = await handler({
+      user: SENDER,
+      originChainId: 1,
+      destinationChainId: 8453,
+      originCurrency: "USDC",
+      destinationCurrency: "USDC",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Balance data not available");
   });
 });

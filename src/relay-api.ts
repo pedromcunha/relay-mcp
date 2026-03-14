@@ -32,7 +32,7 @@ export async function relayApi<T>(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "X-Relay-Agent": "relay-mcp/0.3.0",
+    "X-Relay-Agent": "relay-mcp/0.4.0",
   };
 
   const apiKey = process.env.RELAY_API_KEY;
@@ -412,17 +412,31 @@ export interface RequestsResponse {
   continuation?: string;
 }
 
+export interface GetRequestsParams {
+  user: string;
+  limit?: number;
+  continuation?: string;
+  startTimestamp?: number;
+  endTimestamp?: number;
+  originChainId?: number;
+  destinationChainId?: number;
+  depositAddress?: string;
+}
+
 export async function getRequests(
-  user: string,
-  limit = 10,
-  continuation?: string
+  params: GetRequestsParams
 ): Promise<RequestsResponse> {
-  const params: Record<string, string> = {
-    user,
-    limit: String(limit),
+  const query: Record<string, string> = {
+    user: params.user,
+    limit: String(params.limit ?? 10),
   };
-  if (continuation) params.continuation = continuation;
-  return relayApi<RequestsResponse>("/requests", { params });
+  if (params.continuation) query.continuation = params.continuation;
+  if (params.startTimestamp) query.startTimestamp = String(params.startTimestamp);
+  if (params.endTimestamp) query.endTimestamp = String(params.endTimestamp);
+  if (params.originChainId) query.originChainId = String(params.originChainId);
+  if (params.destinationChainId) query.destinationChainId = String(params.destinationChainId);
+  if (params.depositAddress) query.depositAddress = params.depositAddress;
+  return relayApi<RequestsResponse>("/requests", { params: query });
 }
 
 /**
@@ -494,6 +508,42 @@ export async function getRouteConfig(
     params: {
       originChainId: String(originChainId),
       destinationChainId: String(destinationChainId),
+    },
+  });
+}
+
+export interface UserBalanceConfig extends RouteConfig {
+  user?: {
+    balance?: string;
+    maxAmount?: string;
+    currency?: {
+      chainId: number;
+      address: string;
+      symbol: string;
+      name: string;
+      decimals: number;
+    };
+  };
+}
+
+/**
+ * Fetch route config enriched with the user's balance on the origin chain.
+ * Shows how much of a given token the user holds and the max bridgeable amount.
+ */
+export async function getRouteConfigWithUser(
+  originChainId: number,
+  destinationChainId: number,
+  originCurrency: string,
+  destinationCurrency: string,
+  user: string
+): Promise<UserBalanceConfig> {
+  return relayApi<UserBalanceConfig>("/config/v2", {
+    params: {
+      originChainId: String(originChainId),
+      destinationChainId: String(destinationChainId),
+      originCurrency,
+      destinationCurrency,
+      user,
     },
   });
 }

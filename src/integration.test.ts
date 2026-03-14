@@ -120,7 +120,7 @@ describe("Relay API - live smoke tests", () => {
   // ─── /requests ──────────────────────────────────────────────────
 
   it("GET /requests returns (possibly empty) result for Vitalik", async () => {
-    const result = await getRequests(VITALIK, 5);
+    const result = await getRequests({ user: VITALIK, limit: 5 });
     expect(result).toBeDefined();
     expect(Array.isArray(result.requests)).toBe(true);
     // We can't guarantee Vitalik has Relay transactions, but the API should not error

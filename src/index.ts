@@ -28,11 +28,12 @@ import { register as registerGetAppFees } from "./tools/get-app-fees.js";
 import { register as registerIndexTransaction } from "./tools/index-transaction.js";
 import { register as registerGetMultiInputQuote } from "./tools/get-multi-input-quote.js";
 import { register as registerConvertAmount } from "./tools/convert-amount.js";
+import { register as registerGetUserBalance } from "./tools/get-user-balance.js";
 
 function createServer() {
   const server = new McpServer({
     name: "relay-mcp",
-    version: "0.3.0",
+    version: "0.4.0",
     icons: [
       {
         src: "https://docs.relay.link/favicon.png",
@@ -99,6 +100,7 @@ function createServer() {
   registerIndexTransaction(server);
   registerGetMultiInputQuote(server);
   registerConvertAmount(server);
+  registerGetUserBalance(server);
 
   return server;
 }
@@ -177,7 +179,7 @@ async function main() {
 
     // Health check (no auth needed)
     app.get("/health", (_req, res) => {
-      res.json({ status: "ok", tools: 18, version: "0.3.0", sessions: transports.size });
+      res.json({ status: "ok", tools: 19, version: "0.4.0", sessions: transports.size });
     });
 
     app.listen(port, "0.0.0.0", () => {
