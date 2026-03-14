@@ -67,6 +67,25 @@ export function categorizeError(err: Error): RelayError {
       retryable: true,
     };
   }
+  if (
+    err.message.includes("timed out after")
+  ) {
+    return {
+      category: "network",
+      message: err.message,
+      retryable: true,
+    };
+  }
+  if (
+    err.message.startsWith("Unknown chain") ||
+    err.message.startsWith("Ambiguous chain")
+  ) {
+    return {
+      category: "validation",
+      message: err.message,
+      retryable: false,
+    };
+  }
 
   return {
     category: "api",
