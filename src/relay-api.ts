@@ -91,6 +91,19 @@ export interface Chain {
     address: string;
     decimals: number;
   }>;
+  solverAddresses?: string[];
+  contracts?: {
+    multicall3?: string;
+    multicaller?: string;
+    onlyOwnerMulticaller?: string;
+    relayReceiver?: string;
+    erc20Router?: string;
+    approvalProxy?: string;
+    v3?: {
+      erc20Router?: string;
+      approvalProxy?: string;
+    };
+  };
 }
 
 export interface ChainsResponse {
@@ -314,6 +327,7 @@ export interface RelayRequest {
       hash: string;
       chainId: number;
       timestamp: number;
+      data?: Record<string, unknown>;
     }>;
     outTxs: Array<{
       hash: string;
@@ -322,6 +336,32 @@ export interface RelayRequest {
     }>;
     currency: string;
     timeEstimate: number;
+    failReason?: string;
+    refundFailReason?: string;
+    fees?: Record<string, string>;
+    feesUsd?: Record<string, string>;
+    metadata?: {
+      sender?: string;
+      recipient?: string;
+      currencyIn?: {
+        currency: { chainId: number; address: string; symbol: string; name: string; decimals: number };
+        amount: string;
+        amountFormatted: string;
+        amountUsd: string;
+      };
+      currencyOut?: {
+        currency: { chainId: number; address: string; symbol: string; name: string; decimals: number };
+        amount: string;
+        amountFormatted: string;
+        amountUsd: string;
+      };
+      rate?: string;
+      route?: Record<string, unknown>;
+      [key: string]: unknown;
+    };
+    appFees?: unknown[];
+    paidAppFees?: unknown[];
+    [key: string]: unknown;
   };
   createdAt: string;
   updatedAt: string;
@@ -343,6 +383,18 @@ export async function getRequests(
   };
   if (continuation) params.continuation = continuation;
   return relayApi<RequestsResponse>("/requests", { params });
+}
+
+/**
+ * Look up a request by its Relay request ID.
+ * Returns rich data: fees, metadata, route, fail reason, etc.
+ */
+export async function getRequestById(
+  id: string
+): Promise<RequestsResponse> {
+  return relayApi<RequestsResponse>("/requests/v2", {
+    params: { id },
+  });
 }
 
 /**

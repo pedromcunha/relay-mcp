@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getIntentStatus, getRequestByHash } from "../relay-api.js";
+import {
+  getRequestById,
+  getRequestByHash,
+  type RelayRequest,
+} from "../relay-api.js";
 import {
   validateRequestId,
   validateTxHash,
@@ -8,10 +12,86 @@ import {
 } from "../utils/validators.js";
 import { mcpCatchError } from "../utils/errors.js";
 
+function formatRequest(req: RelayRequest): {
+  summary: string;
+  data: Record<string, unknown>;
+} {
+  const trackingUrl = `https://relay.link/transaction/${req.id}`;
+  const d = req.data;
+
+  // Build origin / destination one-liners
+  const origin = d.metadata?.currencyIn
+    ? `${d.metadata.currencyIn.amountFormatted} ${d.metadata.currencyIn.currency.symbol} on chain ${d.metadata.currencyIn.currency.chainId}`
+    : d.inTxs?.[0]
+      ? `chain ${d.inTxs[0].chainId}`
+      : "unknown origin";
+
+  const destination = d.metadata?.currencyOut
+    ? `${d.metadata.currencyOut.amountFormatted} ${d.metadata.currencyOut.currency.symbol} on chain ${d.metadata.currencyOut.currency.chainId}`
+    : d.outTxs?.[0]
+      ? `chain ${d.outTxs[0].chainId}`
+      : "unknown destination";
+
+  // Status-specific summary
+  let summary: string;
+  switch (req.status) {
+    case "success":
+      summary = `✅ Complete: ${origin} → ${destination}. Output tx: ${d.outTxs?.map((t) => t.hash).join(", ") || "confirming"}.\n\nView: ${trackingUrl}`;
+      break;
+    case "pending":
+      summary = `⏳ Processing: ${origin} → ${destination}. Relay is filling the order.`;
+      break;
+    case "waiting":
+      summary = `🕐 Waiting: ${origin} → ${destination}. Submitted, awaiting relay pickup.`;
+      break;
+    case "failure":
+      summary = `❌ Failed: ${origin} → ${destination}.${d.failReason ? ` Reason: ${d.failReason}` : ""}\n\nView: ${trackingUrl}`;
+      break;
+    case "refund":
+      summary = `↩️ Refunded: ${origin}.${d.refundFailReason ? ` Refund issue: ${d.refundFailReason}` : ""}\n\nView: ${trackingUrl}`;
+      break;
+    default:
+      summary = `Status "${req.status}": ${origin} → ${destination}.\n\nView: ${trackingUrl}`;
+  }
+
+  // Slim structured response
+  const data: Record<string, unknown> = {
+    requestId: req.id,
+    status: req.status,
+    user: req.user,
+    recipient: req.recipient,
+    origin: d.metadata?.currencyIn || {
+      chainId: d.inTxs?.[0]?.chainId,
+      txHash: d.inTxs?.[0]?.hash,
+    },
+    destination: d.metadata?.currencyOut || {
+      chainId: d.outTxs?.[0]?.chainId,
+      txHash: d.outTxs?.[0]?.hash,
+    },
+    inTxHashes: d.inTxs?.map((t) => t.hash),
+    outTxHashes: d.outTxs?.map((t) => t.hash),
+    timeEstimate: d.timeEstimate,
+    createdAt: req.createdAt,
+    updatedAt: req.updatedAt,
+    trackingUrl,
+  };
+
+  if (d.failReason) data.failReason = d.failReason;
+  if (d.refundFailReason) data.refundFailReason = d.refundFailReason;
+  if (d.feesUsd) data.feesUsd = d.feesUsd;
+  if (d.fees) data.fees = d.fees;
+  if (d.metadata?.rate) data.rate = d.metadata.rate;
+  if (d.metadata?.route) data.route = d.metadata.route;
+  if (d.appFees?.length) data.appFees = d.appFees;
+  if (d.paidAppFees?.length) data.paidAppFees = d.paidAppFees;
+
+  return { summary, data };
+}
+
 export function register(server: McpServer) {
   server.tool(
     "get_transaction_status",
-    `Check the status of a Relay bridge or swap transaction.
+    `Check the status of a Relay bridge or swap transaction. Returns rich data including fees, token amounts, fail reasons, and route details.
 
 Accepts either a requestId (from a previous quote/execution) or a txHash (on-chain transaction hash) to look up the request.
 
@@ -57,69 +137,45 @@ Statuses: waiting (broadcast, not confirmed) → pending (relay processing) → 
         if (err) return validationError(err);
       }
 
-      // If txHash provided, resolve to requestId first
-      let resolvedRequestId = requestId;
+      // Look up request — by ID or by hash
+      let result;
       try {
-        if (!resolvedRequestId && txHash) {
-          const result = await getRequestByHash(txHash);
-          if (!result.requests?.length) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `No Relay request found for transaction hash ${txHash}. This tx may not be a Relay transaction, or it may still be indexing.`,
-                },
-              ],
-              isError: true,
-            };
-          }
-          resolvedRequestId = result.requests[0].id;
+        if (requestId) {
+          result = await getRequestById(requestId);
+        } else {
+          result = await getRequestByHash(txHash!);
         }
       } catch (err) {
         return mcpCatchError(err);
       }
 
-      let status;
-      try {
-        status = await getIntentStatus(resolvedRequestId!);
-      } catch (err) {
-        return mcpCatchError(err);
+      if (!result.requests?.length) {
+        const identifier = requestId || txHash;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No Relay request found for ${requestId ? "request ID" : "transaction hash"} ${identifier}. This may not be a Relay transaction, or it may still be indexing. Try index_transaction if you know this tx exists on-chain.`,
+            },
+          ],
+          isError: true,
+        };
       }
-      const trackingUrl = `https://relay.link/transaction/${resolvedRequestId}`;
 
-      let summary: string;
-      switch (status.status) {
-        case "success":
-          summary = `Transaction complete! Destination tx: ${status.txHashes?.join(", ") || "pending confirmation"}.\n\nView on Relay: ${trackingUrl}`;
-          break;
-        case "pending":
-          summary = "Transaction is being processed by the relay network.";
-          break;
-        case "waiting":
-          summary =
-            "Transaction submitted, waiting to be picked up by the relay network.";
-          break;
-        case "failure":
-          summary =
-            "Transaction failed. Check the requestId and try again.";
-          break;
-        case "refund":
-          summary = "Transaction was refunded to the sender.";
-          break;
-        default:
-          summary = `Transaction status: ${status.status}.`;
-      }
+      const req = result.requests[0];
+      const { summary, data } = formatRequest(req);
 
       return {
         content: [
           { type: "text", text: summary },
+          { type: "text", text: JSON.stringify(data, null, 2) },
           {
-            type: "text",
-            text: JSON.stringify(
-              { requestId: resolvedRequestId, ...status },
-              null,
-              2
-            ),
+            type: "resource",
+            resource: {
+              uri: `https://relay.link/transaction/${req.id}`,
+              mimeType: "text/html",
+              text: "View on Relay",
+            },
           },
         ],
       };
