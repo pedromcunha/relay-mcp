@@ -36,6 +36,12 @@ export function register(server: McpServer) {
         vmType: c.vmType,
         nativeCurrency: c.currency.symbol,
         depositEnabled: c.depositEnabled,
+        ...(c.blockProductionLagging ? { degraded: true } : {}),
+        ...(c.solverCurrencies?.length
+          ? {
+              solverCurrencies: c.solverCurrencies.map((sc) => sc.symbol),
+            }
+          : {}),
       }));
 
       const summary = `Found ${simplified.length} supported chain${simplified.length !== 1 ? "s" : ""}${vmType ? ` (${vmType})` : ""}. Examples: ${simplified

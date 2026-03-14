@@ -74,6 +74,7 @@ export interface Chain {
   explorerUrl: string;
   depositEnabled: boolean;
   disabled: boolean;
+  blockProductionLagging: boolean;
   vmType: string;
   iconUrl: string;
   currency: {
@@ -83,6 +84,13 @@ export interface Chain {
     address: string;
     decimals: number;
   };
+  solverCurrencies?: Array<{
+    id: string;
+    symbol: string;
+    name: string;
+    address: string;
+    decimals: number;
+  }>;
 }
 
 export interface ChainsResponse {
