@@ -53,6 +53,18 @@ function createServer() {
     ],
   });
 
+  // Resources
+  server.resource("relay-docs", "relay://docs/llms.txt", {
+    description:
+      "LLM-optimized Relay Protocol documentation — covers all API endpoints, SDK usage, chain support, and integration guides.",
+    mimeType: "text/plain",
+  }, async () => {
+    const res = await fetch("https://docs.relay.link/llms.txt");
+    if (!res.ok) throw new Error(`Failed to fetch llms.txt (${res.status})`);
+    const text = await res.text();
+    return { contents: [{ uri: "relay://docs/llms.txt", mimeType: "text/plain", text }] };
+  });
+
   // Core tools (v0.2.0)
   registerGetSupportedChains(server);
   registerGetSupportedTokens(server);

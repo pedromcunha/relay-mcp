@@ -52,6 +52,13 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
         .describe(
           "Recipient wallet address. Defaults to sender if not provided."
         ),
+      tradeType: z
+        .enum(["EXACT_INPUT", "EXPECTED_OUTPUT", "EXACT_OUTPUT"])
+        .optional()
+        .default("EXACT_INPUT")
+        .describe(
+          "EXACT_INPUT (default): you specify input amount, output varies. EXPECTED_OUTPUT: you specify desired output, input is calculated (allows slippage). EXACT_OUTPUT: you specify exact output required, fails if not deliverable."
+        ),
       includeSteps: z
         .boolean()
         .optional()
@@ -67,6 +74,7 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
       amount,
       sender,
       recipient,
+      tradeType,
       includeSteps,
     }) => {
       // Validate inputs
@@ -102,6 +110,7 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
         originCurrency: currency,
         destinationCurrency: currency,
         amount,
+        tradeType,
         recipient,
       });
       } catch (err) {

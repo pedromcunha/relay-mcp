@@ -30,6 +30,13 @@ Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lam
       amount: z
         .string()
         .describe("Amount in the origin token's smallest unit."),
+      tradeType: z
+        .enum(["EXACT_INPUT", "EXPECTED_OUTPUT", "EXACT_OUTPUT"])
+        .optional()
+        .default("EXACT_INPUT")
+        .describe(
+          "EXACT_INPUT (default): amount is the input. EXPECTED_OUTPUT: amount is the desired output. EXACT_OUTPUT: amount is the exact output required."
+        ),
       sender: z
         .string()
         .optional()
@@ -43,6 +50,7 @@ Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lam
       originCurrency,
       destinationCurrency,
       amount,
+      tradeType,
       sender,
     }) => {
       const effectiveSender =
@@ -79,6 +87,7 @@ Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lam
           originCurrency,
           destinationCurrency,
           amount,
+          tradeType,
         });
       } catch (err) {
         return mcpCatchError(err);
