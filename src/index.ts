@@ -26,6 +26,7 @@ import { register as registerGetTrendingTokens } from "./tools/get-trending-toke
 import { register as registerGetSwapSources } from "./tools/get-swap-sources.js";
 import { register as registerGetAppFees } from "./tools/get-app-fees.js";
 import { register as registerIndexTransaction } from "./tools/index-transaction.js";
+import { register as registerGetMultiInputQuote } from "./tools/get-multi-input-quote.js";
 
 function createServer() {
   const server = new McpServer({
@@ -95,6 +96,7 @@ function createServer() {
   registerGetSwapSources(server);
   registerGetAppFees(server);
   registerIndexTransaction(server);
+  registerGetMultiInputQuote(server);
 
   return server;
 }

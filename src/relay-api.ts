@@ -257,6 +257,36 @@ export async function getQuote(params: QuoteRequest): Promise<QuoteResponse> {
   });
 }
 
+export interface MultiInputOrigin {
+  chainId: number;
+  currency: string;
+  amount: string;
+  user?: string;
+}
+
+export interface MultiInputQuoteRequest {
+  user: string;
+  origins: MultiInputOrigin[];
+  destinationChainId: number;
+  destinationCurrency: string;
+  tradeType?: "EXACT_INPUT" | "EXPECTED_OUTPUT" | "EXACT_OUTPUT";
+  recipient?: string;
+  refundTo?: string;
+  partial?: boolean;
+}
+
+export async function getMultiInputQuote(
+  params: MultiInputQuoteRequest
+): Promise<QuoteResponse> {
+  return relayApi<QuoteResponse>("/execute/swap/multi-input", {
+    method: "POST",
+    body: {
+      ...params,
+      tradeType: params.tradeType || "EXACT_INPUT",
+    },
+  });
+}
+
 export interface IntentStatus {
   status: string;
   inTxHashes?: string[];
