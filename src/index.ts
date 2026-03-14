@@ -1,8 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { randomUUID } from "node:crypto";
+import express from "express";
+import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import { openAuthProvider } from "./auth.js";
 
 // v0.2.0 tools
 import { register as registerGetSupportedChains } from "./tools/get-supported-chains.js";
@@ -63,12 +66,27 @@ async function main() {
 
   if (mode === "http") {
     const port = parseInt(process.env.PORT || "3000", 10);
-    const app = createMcpExpressApp({ host: "0.0.0.0" });
+    const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
+    const app = express();
+    app.use(express.json());
+
+    // OAuth auth router (handles /.well-known/*, /authorize, /token, /register)
+    app.use(
+      mcpAuthRouter({
+        provider: openAuthProvider,
+        issuerUrl: new URL(baseUrl),
+        baseUrl: new URL(baseUrl),
+        serviceDocumentationUrl: new URL("https://docs.relay.link"),
+      })
+    );
+
+    // Bearer auth middleware for MCP endpoints
+    const auth = requireBearerAuth({ verifier: openAuthProvider });
 
     // Track transports per session for cleanup
     const transports = new Map<string, StreamableHTTPServerTransport>();
 
-    app.post("/mcp", async (req, res) => {
+    app.post("/mcp", auth, async (req, res) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
       if (sessionId && transports.has(sessionId)) {
@@ -89,7 +107,7 @@ async function main() {
       }
     });
 
-    app.get("/mcp", async (req, res) => {
+    app.get("/mcp", auth, async (req, res) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
       if (sessionId && transports.has(sessionId)) {
         await transports.get(sessionId)!.handleRequest(req, res);
@@ -98,7 +116,7 @@ async function main() {
       }
     });
 
-    app.delete("/mcp", async (req, res) => {
+    app.delete("/mcp", auth, async (req, res) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
       if (sessionId && transports.has(sessionId)) {
         await transports.get(sessionId)!.close();
@@ -109,7 +127,7 @@ async function main() {
       }
     });
 
-    // Health check
+    // Health check (no auth needed)
     app.get("/health", (_req, res) => {
       res.json({ status: "ok", tools: 16, version: "0.3.0", sessions: transports.size });
     });
