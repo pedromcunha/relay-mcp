@@ -1527,15 +1527,15 @@ describe("get_user_balance", () => {
     enabled: true,
     user: {
       balance: "1500000000",
-      maxAmount: "1200000000",
-      currency: {
-        chainId: 1,
-        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        symbol: "USDC",
-        name: "USD Coin",
-        decimals: 6,
-      },
+      maxBridgeAmount: "1200000000",
     },
+    fee: "0",
+    solver: {
+      address: "0xf70da97812cb96acdf810712aa562db8dfa3dbef",
+      balance: "5000000000",
+      capacityPerRequest: "3000000000",
+    },
+    supportsExternalLiquidity: false,
   };
 
   beforeEach(() => {
@@ -1552,12 +1552,14 @@ describe("get_user_balance", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(result.content[0].text).toContain("Balance: 1500000000 USDC");
-    expect(result.content[0].text).toContain("Max bridgeable: 1200000000 USDC");
+    expect(result.content[0].text).toContain("Balance: 1500000000");
+    expect(result.content[0].text).toContain("Max bridgeable: 1200000000");
+    expect(result.content[0].text).toContain("Solver capacity:");
     const data = JSON.parse(result.content[1].text);
     expect(data.balance).toBe("1500000000");
-    expect(data.maxBridgeableAmount).toBe("1200000000");
+    expect(data.maxBridgeAmount).toBe("1200000000");
     expect(data.routeEnabled).toBe(true);
+    expect(data.solver.capacityPerRequest).toBe("3000000000");
   });
 
   it("rejects invalid user address", async () => {

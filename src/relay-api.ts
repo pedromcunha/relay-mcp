@@ -515,15 +515,15 @@ export async function getRouteConfig(
 export interface UserBalanceConfig extends RouteConfig {
   user?: {
     balance?: string;
-    maxAmount?: string;
-    currency?: {
-      chainId: number;
-      address: string;
-      symbol: string;
-      name: string;
-      decimals: number;
-    };
+    maxBridgeAmount?: string;
   };
+  fee?: string;
+  solver?: {
+    address?: string;
+    balance?: string;
+    capacityPerRequest?: string;
+  };
+  supportsExternalLiquidity?: boolean;
 }
 
 /**

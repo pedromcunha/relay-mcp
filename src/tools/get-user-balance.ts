@@ -75,40 +75,41 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
 
       const routeEnabled = config.enabled !== false;
       const balance = config.user?.balance ?? "unknown";
-      const maxAmount = config.user?.maxAmount ?? "unknown";
-      const symbol = config.user?.currency?.symbol ?? originCurrency;
-      const decimals = config.user?.currency?.decimals;
+      const maxBridgeAmount = config.user?.maxBridgeAmount ?? "unknown";
 
       let summary = `${user.slice(0, 6)}...${user.slice(-4)} on chain ${resolvedOrigin}: `;
       if (balance !== "unknown") {
-        summary += `Balance: ${balance} ${symbol}. Max bridgeable: ${maxAmount} ${symbol}.`;
+        summary += `Balance: ${balance} (raw). Max bridgeable: ${maxBridgeAmount} (raw).`;
       } else {
         summary += `Balance data not available for this route.`;
       }
+      if (config.solver?.capacityPerRequest) {
+        summary += ` Solver capacity: ${config.solver.capacityPerRequest} per request.`;
+      }
       summary += ` Route ${resolvedOrigin} → ${resolvedDest}: ${routeEnabled ? "enabled" : "disabled"}.`;
+
+      const result: Record<string, unknown> = {
+        user,
+        originChainId: resolvedOrigin,
+        destinationChainId: resolvedDest,
+        originCurrency: resolvedOriginCurrency,
+        destinationCurrency: resolvedDestCurrency,
+        balance,
+        maxBridgeAmount,
+        routeEnabled,
+      };
+      if (config.fee !== undefined) result.fee = config.fee;
+      if (config.solver) result.solver = config.solver;
+      if (config.supportsExternalLiquidity !== undefined) {
+        result.supportsExternalLiquidity = config.supportsExternalLiquidity;
+      }
 
       return {
         content: [
           { type: "text", text: summary },
           {
             type: "text",
-            text: JSON.stringify(
-              {
-                user,
-                originChainId: resolvedOrigin,
-                destinationChainId: resolvedDest,
-                currency: {
-                  address: resolvedOriginCurrency,
-                  symbol,
-                  ...(decimals !== undefined ? { decimals } : {}),
-                },
-                balance,
-                maxBridgeableAmount: maxAmount,
-                routeEnabled,
-              },
-              null,
-              2
-            ),
+            text: JSON.stringify(result, null, 2),
           },
         ],
       };
