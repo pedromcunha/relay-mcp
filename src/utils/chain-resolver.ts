@@ -12,12 +12,19 @@ interface ChainEntry {
   vmType: string;
 }
 
-// Cache the promise (not the result) to avoid thundering herd on concurrent calls.
+// Cache the transformed chain list. Derives from getChains() which has its own
+// 5-min TTL, but we also track our own timestamp so we re-transform when the
+// upstream cache refreshes.
+const CACHE_TTL_MS = 5 * 60 * 1000;
 let chainsCachePromise: Promise<ChainEntry[]> | null = null;
+let chainsCacheTime = 0;
 
 function loadChains(): Promise<ChainEntry[]> {
-  if (chainsCachePromise) return chainsCachePromise;
+  if (chainsCachePromise && Date.now() - chainsCacheTime < CACHE_TTL_MS) {
+    return chainsCachePromise;
+  }
 
+  chainsCacheTime = Date.now();
   chainsCachePromise = getChains().then(({ chains }) =>
     chains.map((c: Chain) => ({
       id: c.id,
@@ -27,7 +34,7 @@ function loadChains(): Promise<ChainEntry[]> {
     }))
   );
   // Reset on failure so the next call retries instead of returning a cached rejection.
-  chainsCachePromise.catch(() => { chainsCachePromise = null; });
+  chainsCachePromise.catch(() => { chainsCachePromise = null; chainsCacheTime = 0; });
   return chainsCachePromise;
 }
 

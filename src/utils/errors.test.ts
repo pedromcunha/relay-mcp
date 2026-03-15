@@ -90,11 +90,12 @@ describe("categorizeError", () => {
     expect(result.message).toBe("Something totally unexpected happened");
   });
 
-  it("handles error with no status code in message", () => {
+  it("categorizes Unknown chain as validation error", () => {
     const err = new Error("Unknown chain \"foobar\"");
     const result = categorizeError(err);
-    expect(result.category).toBe("api");
+    expect(result.category).toBe("validation");
     expect(result.httpCode).toBeUndefined();
+    expect(result.retryable).toBe(false);
   });
 });
 

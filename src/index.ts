@@ -29,6 +29,7 @@ import { register as registerIndexTransaction } from "./tools/index-transaction.
 import { register as registerGetMultiInputQuote } from "./tools/get-multi-input-quote.js";
 import { register as registerConvertAmount } from "./tools/convert-amount.js";
 import { register as registerGetUserBalance } from "./tools/get-user-balance.js";
+import { register as registerExecuteApiCall } from "./tools/execute-api-call.js";
 
 function createServer() {
   const server = new McpServer({
@@ -101,6 +102,9 @@ function createServer() {
   registerGetMultiInputQuote(server);
   registerConvertAmount(server);
   registerGetUserBalance(server);
+
+  // Code Mode lite: raw API access (pairs with get_api_schema for discovery)
+  registerExecuteApiCall(server);
 
   return server;
 }
@@ -179,7 +183,7 @@ async function main() {
 
     // Health check (no auth needed)
     app.get("/health", (_req, res) => {
-      res.json({ status: "ok", tools: 19, version: "0.4.0", sessions: transports.size });
+      res.json({ status: "ok", tools: 20, version: "0.4.0", sessions: transports.size });
     });
 
     app.listen(port, "0.0.0.0", () => {

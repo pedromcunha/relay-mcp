@@ -2,6 +2,7 @@ const BASE_URL = process.env.RELAY_API_URL || "https://api.relay.link";
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 500;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface RequestOptions {
   method?: "GET" | "POST";
@@ -151,16 +152,21 @@ export interface ChainsResponse {
 }
 
 /**
- * Fetch supported chains (cached in-memory).
+ * Fetch supported chains (cached in-memory with TTL).
  * Both chain-resolver and deeplink consume this, so caching here
  * avoids duplicate HTTP calls from separate consumers.
+ * Refreshes every CACHE_TTL_MS to pick up new chains, status changes, etc.
  */
 let chainsCachePromise: Promise<ChainsResponse> | null = null;
+let chainsCacheTime = 0;
 export function getChains(): Promise<ChainsResponse> {
-  if (chainsCachePromise) return chainsCachePromise;
+  if (chainsCachePromise && Date.now() - chainsCacheTime < CACHE_TTL_MS) {
+    return chainsCachePromise;
+  }
+  chainsCacheTime = Date.now();
   chainsCachePromise = relayApi<ChainsResponse>("/chains");
   // Reset on failure so the next call retries instead of returning a cached rejection.
-  chainsCachePromise.catch(() => { chainsCachePromise = null; });
+  chainsCachePromise.catch(() => { chainsCachePromise = null; chainsCacheTime = 0; });
   return chainsCachePromise;
 }
 
@@ -672,13 +678,17 @@ export async function indexTransaction(
 }
 
 /**
- * Fetch the Relay OpenAPI specification (cached in-memory).
+ * Fetch the Relay OpenAPI specification (cached in-memory with TTL).
  * Caches the promise to avoid duplicate fetches on concurrent calls.
- * Used by get_api_schema for progressive discovery.
+ * Used by get_api_schema for progressive discovery and execute_api_call.
  */
 let specCachePromise: Promise<any> | null = null;
+let specCacheTime = 0;
 export function getOpenApiSpec(): Promise<any> {
-  if (specCachePromise) return specCachePromise;
+  if (specCachePromise && Date.now() - specCacheTime < CACHE_TTL_MS) {
+    return specCachePromise;
+  }
+  specCacheTime = Date.now();
   specCachePromise = (async () => {
     const url = `${BASE_URL}/documentation/json`;
     const controller = new AbortController();
@@ -700,6 +710,6 @@ export function getOpenApiSpec(): Promise<any> {
     return res.json();
   })();
   // Reset on any failure (network, HTTP, JSON parse) so the next call retries.
-  specCachePromise.catch(() => { specCachePromise = null; });
+  specCachePromise.catch(() => { specCachePromise = null; specCacheTime = 0; });
   return specCachePromise;
 }

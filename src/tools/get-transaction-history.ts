@@ -15,9 +15,12 @@ Filter by time range, origin/destination chain, or deposit address to narrow res
       user: z.string().describe("Wallet address to look up."),
       limit: z
         .number()
+        .int()
+        .min(1)
+        .max(100)
         .optional()
         .default(10)
-        .describe("Max number of transactions to return. Defaults to 10."),
+        .describe("Max number of transactions to return (1-100). Defaults to 10."),
       cursor: z
         .string()
         .optional()
@@ -34,10 +37,14 @@ Filter by time range, origin/destination chain, or deposit address to narrow res
         .describe("Filter by destination chain (ID or name like 'base', 'arb')."),
       startTimestamp: z
         .number()
+        .int()
+        .min(0)
         .optional()
         .describe("Filter: only transactions after this Unix timestamp (seconds)."),
       endTimestamp: z
         .number()
+        .int()
+        .min(0)
         .optional()
         .describe("Filter: only transactions before this Unix timestamp (seconds)."),
       depositAddress: z

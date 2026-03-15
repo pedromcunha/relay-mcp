@@ -21,9 +21,12 @@ Use this to answer "what tokens are trending?" or "what's popular on Base right 
         ),
       limit: z
         .number()
+        .int()
+        .min(1)
+        .max(50)
         .optional()
         .default(10)
-        .describe("Max tokens to return. Defaults to 10."),
+        .describe("Max tokens to return (1-50). Defaults to 10."),
     },
     async ({ chainId, limit }) => {
       let resolvedChainId: number | undefined;

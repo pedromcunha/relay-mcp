@@ -49,15 +49,19 @@ describe("validateAddress", () => {
     expect(validateAddress("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t")).toBeNull();
   });
 
-  // Invalid addresses
-  it("rejects too-short address", () => {
-    const err = validateAddress("0x1234");
-    expect(err).not.toBeNull();
-    expect(err!.message).toContain("Invalid address format");
+  // Short hex addresses are valid (HypeVM uses 32-char 0x addresses)
+  it("accepts short 0x-prefixed hex (HypeVM, etc.)", () => {
+    expect(validateAddress("0x1234")).toBeNull();
   });
 
-  it("rejects too-long address", () => {
-    const err = validateAddress("0x" + "a".repeat(41));
+  // 0x + 41 hex chars is within 1-64 range — valid
+  it("accepts 0x + 41 hex chars (within multi-VM range)", () => {
+    expect(validateAddress("0x" + "a".repeat(41))).toBeNull();
+  });
+
+  // Actually too long: 0x + 65 hex chars exceeds the 64-char limit
+  it("rejects too-long hex address (>64 chars after 0x)", () => {
+    const err = validateAddress("0x" + "a".repeat(65));
     expect(err).not.toBeNull();
     expect(err!.message).toContain("Invalid address format");
   });

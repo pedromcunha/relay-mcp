@@ -6,11 +6,12 @@ import { resolveChainId, getChainVmType } from "../utils/chain-resolver.js";
 import { resolveTokenAddress } from "../utils/token-resolver.js";
 import {
   validateAddress,
+  validateAddresses,
   validateAmount,
   validationError,
 } from "../utils/validators.js";
 import { mcpCatchError } from "../utils/errors.js";
-import { NATIVE_TOKEN_ADDRESSES } from "../utils/descriptions.js";
+import { NATIVE_TOKEN_ADDRESSES, AMOUNT_ENCODING, CHAIN_ID_FORMAT } from "../utils/descriptions.js";
 
 export function register(server: McpServer) {
   server.tool(
@@ -19,7 +20,7 @@ export function register(server: McpServer) {
 
 Use this for portfolio consolidation, rebalancing, or collecting scattered funds. Each origin specifies its own chain, token, and amount. All origins settle to one destination chain and token.
 
-Amounts must be in each token's smallest unit. Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb').`,
+${AMOUNT_ENCODING} ${CHAIN_ID_FORMAT}`,
     {
       origins: z
         .array(
@@ -68,13 +69,11 @@ Amounts must be in each token's smallest unit. Chain IDs can be numbers (8453) o
       partial,
       includeSteps,
     }) => {
-      // Validate sender
-      const senderErr = validateAddress(sender, "sender");
-      if (senderErr) return validationError(senderErr);
-      if (recipient) {
-        const recipErr = validateAddress(recipient, "recipient");
-        if (recipErr) return validationError(recipErr);
-      }
+      // Validate sender + recipient
+      const addrPairs: [string, string][] = [[sender, "sender"]];
+      if (recipient) addrPairs.push([recipient, "recipient"]);
+      const addrErr = validateAddresses(...addrPairs);
+      if (addrErr) return addrErr;
 
       // Validate each origin
       for (let i = 0; i < origins.length; i++) {

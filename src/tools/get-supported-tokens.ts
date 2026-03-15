@@ -27,9 +27,12 @@ export function register(server: McpServer) {
         .describe("Only return verified tokens. Defaults to true."),
       limit: z
         .number()
+        .int()
+        .min(1)
+        .max(100)
         .optional()
         .default(20)
-        .describe("Max number of token groups to return. Defaults to 20."),
+        .describe("Max number of token groups to return (1-100). Defaults to 20."),
     },
     async ({ chainIds, term, verified, limit }) => {
       let result;

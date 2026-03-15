@@ -11,12 +11,13 @@ import {
   validationError,
 } from "../utils/validators.js";
 import { mcpCatchError } from "../utils/errors.js";
+import { RELAY_APP_URL } from "../utils/descriptions.js";
 
 function formatRequest(req: RelayRequest): {
   summary: string;
   data: Record<string, unknown>;
 } {
-  const trackingUrl = `https://relay.link/transaction/${req.id}`;
+  const trackingUrl = `${RELAY_APP_URL}/transaction/${req.id}`;
   const d = req.data;
 
   // Build origin / destination one-liners
@@ -172,7 +173,7 @@ Statuses: waiting (broadcast, not confirmed) → pending (relay processing) → 
           {
             type: "resource",
             resource: {
-              uri: `https://relay.link/transaction/${req.id}`,
+              uri: `${RELAY_APP_URL}/transaction/${req.id}`,
               mimeType: "text/html",
               text: "View on Relay",
             },

@@ -6,11 +6,12 @@ import { resolveChainId, getChainVmType } from "../utils/chain-resolver.js";
 import { resolveTokenAddress } from "../utils/token-resolver.js";
 import {
   validateAddress,
+  validateAddresses,
   validateAmount,
   validationError,
 } from "../utils/validators.js";
 import { mcpCatchError } from "../utils/errors.js";
-import { NATIVE_TOKEN_ADDRESSES } from "../utils/descriptions.js";
+import { NATIVE_TOKEN_ADDRESSES, AMOUNT_ENCODING, CHAIN_ID_FORMAT, TRADE_TYPE_DESC } from "../utils/descriptions.js";
 
 export function register(server: McpServer) {
   server.tool(
@@ -21,9 +22,7 @@ Use this for same-token cross-chain transfers. For different tokens (same or cro
 
 Returns execution steps — each step contains ready-to-sign transaction data (to, data, value, chainId, gas). An agent with wallet tooling can sign and submit these directly. Also returns a relay.link deep link as a fallback for manual execution.
 
-Amounts must be in the token's smallest unit. Use get_supported_tokens to look up decimals. Examples: 1 ETH = "1000000000000000000" (18 decimals), 1 USDC = "1000000" (6 decimals), 1 BTC = "100000000" (8 decimals, satoshis), 1 SOL = "1000000000" (9 decimals, lamports).
-
-Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 'solana').`,
+${AMOUNT_ENCODING} ${CHAIN_ID_FORMAT}`,
     {
       originChainId: z
         .union([z.number(), z.string()])
@@ -56,9 +55,7 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
         .enum(["EXACT_INPUT", "EXPECTED_OUTPUT", "EXACT_OUTPUT"])
         .optional()
         .default("EXACT_INPUT")
-        .describe(
-          "EXACT_INPUT (default): you specify input amount, output varies. EXPECTED_OUTPUT: you specify desired output, input is calculated (allows slippage). EXACT_OUTPUT: you specify exact output required, fails if not deliverable."
-        ),
+        .describe(TRADE_TYPE_DESC),
       useDepositAddress: z
         .boolean()
         .optional()
@@ -92,13 +89,11 @@ Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 
       refundTo,
       includeSteps,
     }) => {
-      // Validate sender address
-      const senderErr = validateAddress(sender, "sender");
-      if (senderErr) return validationError(senderErr);
-      if (recipient) {
-        const recipErr = validateAddress(recipient, "recipient");
-        if (recipErr) return validationError(recipErr);
-      }
+      // Validate inputs
+      const addrPairs: [string, string][] = [[sender, "sender"]];
+      if (recipient) addrPairs.push([recipient, "recipient"]);
+      const addrErr = validateAddresses(...addrPairs);
+      if (addrErr) return addrErr;
       const amtErr = validateAmount(amount);
       if (amtErr) return validationError(amtErr);
 

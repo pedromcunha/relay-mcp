@@ -9,7 +9,7 @@ import {
   validationError,
 } from "../utils/validators.js";
 import { mcpCatchError } from "../utils/errors.js";
-import { NATIVE_TOKEN_ADDRESSES } from "../utils/descriptions.js";
+import { NATIVE_TOKEN_ADDRESSES, AMOUNT_ENCODING, CHAIN_ID_FORMAT, TRADE_TYPE_DESC } from "../utils/descriptions.js";
 
 export function register(server: McpServer) {
   server.tool(
@@ -18,7 +18,7 @@ export function register(server: McpServer) {
 
 Use this for comparing route costs or showing users expected fees. For standalone token pricing (not route-specific), use get_token_price instead.
 
-Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lamports for SOL). Chain IDs can be numbers (8453) or names ('base', 'ethereum', 'arb', 'bitcoin', 'solana').`,
+${AMOUNT_ENCODING} ${CHAIN_ID_FORMAT}`,
     {
       originChainId: z.union([z.number(), z.string()]).describe("Source chain ID or name (e.g. 1, 'ethereum', 'eth')."),
       destinationChainId: z.union([z.number(), z.string()]).describe("Destination chain ID or name (e.g. 8453, 'base')."),
@@ -35,9 +35,7 @@ Amounts must be in the token's smallest unit (wei for ETH, satoshis for BTC, lam
         .enum(["EXACT_INPUT", "EXPECTED_OUTPUT", "EXACT_OUTPUT"])
         .optional()
         .default("EXACT_INPUT")
-        .describe(
-          "EXACT_INPUT (default): amount is the input. EXPECTED_OUTPUT: amount is the desired output. EXACT_OUTPUT: amount is the exact output required."
-        ),
+        .describe(TRADE_TYPE_DESC),
       sender: z
         .string()
         .optional()

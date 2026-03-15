@@ -1440,9 +1440,27 @@ describe("get_app_fees", () => {
     expect(result.content[0].text).toContain("Validation error");
   });
 
-  it("handles API error", async () => {
+  it("degrades gracefully when one call fails", async () => {
     vi.mocked(getAppFeeBalances).mockRejectedValueOnce(
       new Error("Relay API GET /app-fees/balances failed (429): rate limited")
+    );
+
+    const result = await handler({ wallet: SENDER });
+
+    // Should succeed with partial data + warning (not error)
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Balance data unavailable");
+    const data = JSON.parse(result.content[1].text);
+    expect(data.warnings).toContain("Balance data unavailable.");
+    expect(data.claims).toHaveLength(1);
+  });
+
+  it("returns error when both calls fail", async () => {
+    vi.mocked(getAppFeeBalances).mockRejectedValueOnce(
+      new Error("Relay API GET /app-fees/balances failed (429): rate limited")
+    );
+    vi.mocked(getAppFeeClaims).mockRejectedValueOnce(
+      new Error("Relay API GET /app-fees/claims failed (429): rate limited")
     );
 
     const result = await handler({ wallet: SENDER });

@@ -21,39 +21,64 @@ Returns both current claimable balances and historical claims in one call.`,
       const addrErr = validateAddress(wallet, "wallet");
       if (addrErr) return validationError(addrErr);
 
-      let balancesRes, claimsRes;
-      try {
-        [balancesRes, claimsRes] = await Promise.all([
-          getAppFeeBalances(wallet),
-          getAppFeeClaims(wallet),
-        ]);
-      } catch (err) {
-        return mcpCatchError(err);
+      // Graceful partial failure: return what we can even if one call fails.
+      const warnings: string[] = [];
+      const results = await Promise.allSettled([
+        getAppFeeBalances(wallet),
+        getAppFeeClaims(wallet),
+      ]);
+
+      // If both fail, return the first error
+      if (
+        results[0].status === "rejected" &&
+        results[1].status === "rejected"
+      ) {
+        return mcpCatchError(results[0].reason);
       }
 
-      const balances = balancesRes.balances || [];
-      const claims = claimsRes.claims || [];
+      const balances =
+        results[0].status === "fulfilled"
+          ? results[0].value.balances || []
+          : (() => {
+              warnings.push("Balance data unavailable.");
+              return [];
+            })();
+
+      const claims =
+        results[1].status === "fulfilled"
+          ? results[1].value.claims || []
+          : (() => {
+              warnings.push("Claims history unavailable.");
+              return [];
+            })();
 
       const totalUsd = balances.reduce(
         (sum, b) => sum + (parseFloat(b.amountUsd) || 0),
         0
       );
 
-      const summary = balances.length > 0
-        ? `${wallet.slice(0, 6)}...${wallet.slice(-4)} has $${totalUsd.toFixed(2)} in claimable app fees across ${balances.length} token${balances.length !== 1 ? "s" : ""}. ${claims.length} past claim${claims.length !== 1 ? "s" : ""}.`
-        : `No claimable app fees for ${wallet.slice(0, 6)}...${wallet.slice(-4)}. ${claims.length} past claim${claims.length !== 1 ? "s" : ""}.`;
+      let summary =
+        balances.length > 0
+          ? `${wallet.slice(0, 6)}...${wallet.slice(-4)} has $${totalUsd.toFixed(2)} in claimable app fees across ${balances.length} token${balances.length !== 1 ? "s" : ""}. ${claims.length} past claim${claims.length !== 1 ? "s" : ""}.`
+          : `No claimable app fees for ${wallet.slice(0, 6)}...${wallet.slice(-4)}. ${claims.length} past claim${claims.length !== 1 ? "s" : ""}.`;
+
+      if (warnings.length) {
+        summary += ` Note: ${warnings.join(" ")}`;
+      }
+
+      const data: Record<string, unknown> = {
+        balances,
+        claims,
+        totalClaimableUsd: totalUsd.toFixed(2),
+      };
+      if (warnings.length) {
+        data.warnings = warnings;
+      }
 
       return {
         content: [
           { type: "text", text: summary },
-          {
-            type: "text",
-            text: JSON.stringify(
-              { balances, claims, totalClaimableUsd: totalUsd.toFixed(2) },
-              null,
-              2
-            ),
-          },
+          { type: "text", text: JSON.stringify(data, null, 2) },
         ],
       };
     }

@@ -49,13 +49,17 @@ If a chain is unhealthy or has low liquidity, bridging may fail or be slow.`,
         return mcpCatchError(err);
       }
 
-      // Fetch health + liquidity + chain data in parallel, optionally route config
+      // Fetch health + liquidity + chain data in parallel.
+      // Graceful partial failure: health is required, others degrade gracefully.
       let health: Awaited<ReturnType<typeof getChainHealth>>;
-      let liquidity: Awaited<ReturnType<typeof getChainLiquidity>>;
-      let routeConfig: Awaited<ReturnType<typeof getRouteConfig>> | null;
+      let liquidity: Awaited<ReturnType<typeof getChainLiquidity>> | null =
+        null;
+      let routeConfig: Awaited<ReturnType<typeof getRouteConfig>> | null = null;
       let chainData: Chain | undefined;
+      const warnings: string[] = [];
+
       try {
-        const [h, l, rc, chainsResp] = await Promise.all([
+        const results = await Promise.allSettled([
           getChainHealth(resolvedChainId),
           getChainLiquidity(resolvedChainId),
           resolvedDestId !== undefined
@@ -63,20 +67,42 @@ If a chain is unhealthy or has low liquidity, bridging may fail or be slow.`,
             : Promise.resolve(null),
           getChains(),
         ]);
-        health = h;
-        liquidity = l;
-        routeConfig = rc;
-        chainData = chainsResp.chains.find((c) => c.id === resolvedChainId);
+
+        // Health is required — fail if it's missing
+        if (results[0].status === "rejected") {
+          throw results[0].reason;
+        }
+        health = results[0].value;
+
+        if (results[1].status === "fulfilled") {
+          liquidity = results[1].value;
+        } else {
+          warnings.push("Liquidity data unavailable.");
+        }
+
+        if (results[2].status === "fulfilled") {
+          routeConfig = results[2].value;
+        } else if (resolvedDestId !== undefined) {
+          warnings.push("Route config unavailable.");
+        }
+
+        if (results[3].status === "fulfilled") {
+          chainData = results[3].value.chains.find(
+            (c) => c.id === resolvedChainId
+          );
+        }
       } catch (err) {
         return mcpCatchError(err);
       }
 
       // Slim liquidity to essentials
-      const slimLiquidity = liquidity.map((entry) => ({
-        symbol: entry.symbol,
-        balance: entry.balance,
-        amountUsd: entry.amountUsd,
-      }));
+      const slimLiquidity = liquidity
+        ? liquidity.map((entry) => ({
+            symbol: entry.symbol,
+            balance: entry.balance,
+            amountUsd: entry.amountUsd,
+          }))
+        : [];
 
       const totalLiquidityUsd = slimLiquidity.reduce(
         (sum, e) => sum + (parseFloat(e.amountUsd) || 0),
@@ -84,7 +110,11 @@ If a chain is unhealthy or has low liquidity, bridging may fail or be slow.`,
       );
 
       const healthEmoji = health.healthy ? "✅" : "❌";
-      let summary = `Chain ${resolvedChainId}: ${healthEmoji} ${health.healthy ? "Healthy" : "Unhealthy"}. Solver liquidity: $${totalLiquidityUsd.toLocaleString()} across ${slimLiquidity.length} token${slimLiquidity.length !== 1 ? "s" : ""}.`;
+      let summary = `Chain ${resolvedChainId}: ${healthEmoji} ${health.healthy ? "Healthy" : "Unhealthy"}.`;
+
+      if (liquidity) {
+        summary += ` Solver liquidity: $${totalLiquidityUsd.toLocaleString()} across ${slimLiquidity.length} token${slimLiquidity.length !== 1 ? "s" : ""}.`;
+      }
 
       if (chainData?.solverAddresses?.length) {
         summary += ` ${chainData.solverAddresses.length} solver address${chainData.solverAddresses.length !== 1 ? "es" : ""}.`;
@@ -93,6 +123,10 @@ If a chain is unhealthy or has low liquidity, bridging may fail or be slow.`,
       if (routeConfig && resolvedDestId !== undefined) {
         const enabled = routeConfig.enabled !== false;
         summary += ` Route to chain ${resolvedDestId}: ${enabled ? "enabled ✅" : "disabled ❌"}.`;
+      }
+
+      if (warnings.length) {
+        summary += ` Note: ${warnings.join(" ")}`;
       }
 
       const result: Record<string, unknown> = {
@@ -110,6 +144,9 @@ If a chain is unhealthy or has low liquidity, bridging may fail or be slow.`,
       }
       if (routeConfig !== null) {
         result.routeConfig = routeConfig;
+      }
+      if (warnings.length) {
+        result.warnings = warnings;
       }
 
       return {

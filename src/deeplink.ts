@@ -1,17 +1,23 @@
 import { getChains } from "./relay-api.js";
+import { RELAY_APP_URL } from "./utils/descriptions.js";
 
-// Cache the promise to avoid duplicate fetches on concurrent calls.
+// Cache the chain name map with TTL, matching the upstream getChains() TTL.
+const CACHE_TTL_MS = 5 * 60 * 1000;
 let chainNameMapPromise: Promise<Map<number, string>> | null = null;
+let chainNameMapTime = 0;
 
 function getChainNameMap(): Promise<Map<number, string>> {
-  if (chainNameMapPromise) return chainNameMapPromise;
+  if (chainNameMapPromise && Date.now() - chainNameMapTime < CACHE_TTL_MS) {
+    return chainNameMapPromise;
+  }
+  chainNameMapTime = Date.now();
   chainNameMapPromise = getChains().then(({ chains }) =>
     new Map(
       chains.map((c) => [c.id, c.name.toLowerCase().replace(/\s+/g, "-")])
     )
   );
   // Reset on failure so the next call retries instead of returning a cached rejection.
-  chainNameMapPromise.catch(() => { chainNameMapPromise = null; });
+  chainNameMapPromise.catch(() => { chainNameMapPromise = null; chainNameMapTime = 0; });
   return chainNameMapPromise;
 }
 
@@ -32,7 +38,7 @@ export async function buildRelayAppUrl(
   const chainName = nameMap.get(params.destinationChainId);
   if (!chainName) return null;
 
-  const url = new URL(`https://relay.link/bridge/${chainName}`);
+  const url = new URL(`${RELAY_APP_URL}/bridge/${chainName}`);
 
   if (params.fromChainId !== undefined)
     url.searchParams.set("fromChainId", String(params.fromChainId));
