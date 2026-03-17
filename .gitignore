@@ -1,8 +1,19 @@
+# Dependencies & Build
 node_modules/
 dist/
-.env
 *.tsbuildinfo
+
+# Environment
+.env
+
+# Editor & Tools
 .claude
+.smithery
+.vscode
+
+# MCP Registry
 .mcpregistry_registry_token
 .mcpregistry_github_token
-.smithery
+
+# Contribute Now
+.contributerc.json
