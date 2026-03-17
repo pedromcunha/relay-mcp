@@ -2,62 +2,165 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getQuote } from "../relay-api.js";
 import { buildRelayAppUrl } from "../deeplink.js";
+import { resolveChainId, getChainVmType } from "../utils/chain-resolver.js";
+import { resolveTokenAddress } from "../utils/token-resolver.js";
+import {
+  validateAddress,
+  validateAddresses,
+  validateAmount,
+  validationError,
+} from "../utils/validators.js";
+import { mcpCatchError } from "../utils/errors.js";
+import { NATIVE_TOKEN_ADDRESSES, AMOUNT_ENCODING, CHAIN_ID_FORMAT, TRADE_TYPE_DESC } from "../utils/descriptions.js";
 
 export function register(server: McpServer) {
   server.tool(
     "get_bridge_quote",
-    "Get a quote for bridging the same token from one chain to another (e.g. ETH on Ethereum → ETH on Base). Returns estimated output amount, fees breakdown, and time estimate. Use get_swap_quote instead if you want to change the token type.",
+    `Get a quote for bridging the SAME token from one chain to another (e.g. ETH on Ethereum → ETH on Base).
+
+Use this for same-token cross-chain transfers. For different tokens (same or cross-chain), use get_swap_quote instead.
+
+Returns execution steps — each step contains ready-to-sign transaction data (to, data, value, chainId, gas). An agent with wallet tooling can sign and submit these directly. Also returns a relay.link deep link as a fallback for manual execution.
+
+${AMOUNT_ENCODING} ${CHAIN_ID_FORMAT}`,
     {
       originChainId: z
-        .number()
-        .describe("Source chain ID (e.g. 1 for Ethereum)."),
+        .union([z.number(), z.string()])
+        .describe(
+          "Source chain ID or name (e.g. 1, 'ethereum', 'eth')."
+        ),
       destinationChainId: z
-        .number()
-        .describe("Destination chain ID (e.g. 8453 for Base)."),
+        .union([z.number(), z.string()])
+        .describe(
+          "Destination chain ID or name (e.g. 8453, 'base')."
+        ),
       currency: z
         .string()
         .describe(
-          'Token address to bridge. Use "0x0000000000000000000000000000000000000000" for native ETH.'
+          `Token address or symbol to bridge. Symbols like "ETH", "USDC", "USDT", "WETH" are resolved automatically. ${NATIVE_TOKEN_ADDRESSES}`
         ),
       amount: z
         .string()
         .describe(
-          "Amount to bridge in the token's smallest unit (wei for ETH). Example: \"1000000000000000000\" for 1 ETH."
+          "Amount to bridge in the token's smallest unit. Examples: \"1000000000000000000\" for 1 ETH (18 decimals), \"100000000\" for 1 BTC (8 decimals)."
         ),
-      sender: z
-        .string()
-        .describe("Sender wallet address."),
+      sender: z.string().describe("Sender wallet address."),
       recipient: z
         .string()
         .optional()
         .describe(
           "Recipient wallet address. Defaults to sender if not provided."
         ),
+      tradeType: z
+        .enum(["EXACT_INPUT", "EXPECTED_OUTPUT", "EXACT_OUTPUT"])
+        .optional()
+        .default("EXACT_INPUT")
+        .describe(TRADE_TYPE_DESC),
+      useDepositAddress: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          "Use deposit address flow — returns an address the user can send funds to (e.g. from a CEX or wallet) instead of transaction calldata. No wallet signing needed. The deposit address is reusable for the same origin→destination→currency route. Only supports EXACT_INPUT. Adds ~33k gas for native tokens, ~70k for ERC-20s."
+        ),
+      refundTo: z
+        .string()
+        .optional()
+        .describe(
+          "Address to send refunds to if the bridge fails. Defaults to sender. Useful when sender is a deposit address or contract."
+        ),
+      includeSteps: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          "Include raw transaction steps for signing. Only needed if you have wallet tooling to submit transactions directly. Omit to save tokens."
+        ),
     },
-    async ({ originChainId, destinationChainId, currency, amount, sender, recipient }) => {
-      const quote = await getQuote({
-        user: sender,
-        originChainId,
-        destinationChainId,
-        originCurrency: currency,
-        destinationCurrency: currency,
-        amount,
-        recipient,
-      });
+    async ({
+      originChainId,
+      destinationChainId,
+      currency,
+      amount,
+      sender,
+      recipient,
+      tradeType,
+      useDepositAddress,
+      refundTo,
+      includeSteps,
+    }) => {
+      // Validate inputs
+      const addrPairs: [string, string][] = [[sender, "sender"]];
+      if (recipient) addrPairs.push([recipient, "recipient"]);
+      const addrErr = validateAddresses(...addrPairs);
+      if (addrErr) return addrErr;
+      const amtErr = validateAmount(amount);
+      if (amtErr) return validationError(amtErr);
 
-      const { details, fees } = quote;
-      const summary = `Bridge ${details.currencyIn.amountFormatted} ${details.currencyIn.currency.symbol} (chain ${originChainId}) → ${details.currencyOut.amountFormatted} ${details.currencyOut.currency.symbol} (chain ${destinationChainId}). Total fees: $${fees.relayer.amountUsd}. ETA: ~${details.timeEstimate}s.`;
+      let resolvedOrigin: number;
+      let resolvedDest: number;
+      try {
+        [resolvedOrigin, resolvedDest] = await Promise.all([
+          resolveChainId(originChainId),
+          resolveChainId(destinationChainId),
+        ]);
+      } catch (err) {
+        return mcpCatchError(err);
+      }
+
+      // Resolve token symbol → address if needed
+      let resolvedCurrency: string;
+      try {
+        const vmType = await getChainVmType(resolvedOrigin);
+        resolvedCurrency = await resolveTokenAddress(currency, resolvedOrigin, vmType);
+      } catch (err) {
+        return mcpCatchError(err);
+      }
+
+      let quote;
+      try {
+        quote = await getQuote({
+        user: sender,
+        originChainId: resolvedOrigin,
+        destinationChainId: resolvedDest,
+        originCurrency: resolvedCurrency,
+        destinationCurrency: resolvedCurrency,
+        amount,
+        tradeType,
+        recipient,
+        useDepositAddress: useDepositAddress || undefined,
+        refundTo,
+      });
+      } catch (err) {
+        return mcpCatchError(err);
+      }
+
+      const { steps, details, fees } = quote;
+      const depositAddress = steps?.[0]?.depositAddress;
+      const depositSummary = depositAddress
+        ? ` Send funds to deposit address: ${depositAddress}`
+        : "";
+      const summary = `Bridge ${details.currencyIn.amountFormatted} ${details.currencyIn.currency.symbol} (chain ${resolvedOrigin}) → ${details.currencyOut.amountFormatted} ${details.currencyOut.currency.symbol} (chain ${resolvedDest}). Total fees: $${fees.relayer.amountUsd}. ETA: ~${details.timeEstimate}s.${depositSummary}`;
 
       const deeplinkUrl = await buildRelayAppUrl({
-        destinationChainId,
-        fromChainId: originChainId,
-        fromCurrency: currency,
-        toCurrency: currency,
+        destinationChainId: resolvedDest,
+        fromChainId: resolvedOrigin,
+        fromCurrency: resolvedCurrency,
+        toCurrency: resolvedCurrency,
         amount: details.currencyIn.amountFormatted,
         toAddress: recipient,
       });
 
-      const content: Array<{ type: "text"; text: string } | { type: "resource_link"; uri: string; name: string; description: string; mimeType: string }> = [
+      const content: Array<
+        | { type: "text"; text: string }
+        | {
+            type: "resource_link";
+            uri: string;
+            name: string;
+            description: string;
+            mimeType: string;
+          }
+      > = [
         { type: "text", text: summary },
         {
           type: "text",
@@ -68,12 +171,20 @@ export function register(server: McpServer) {
               amountInUsd: details.currencyIn.amountUsd,
               amountOutUsd: details.currencyOut.amountUsd,
               fees: {
-                gas: { formatted: fees.gas.amountFormatted, usd: fees.gas.amountUsd },
-                relayer: { formatted: fees.relayer.amountFormatted, usd: fees.relayer.amountUsd },
+                gas: {
+                  formatted: fees.gas.amountFormatted,
+                  usd: fees.gas.amountUsd,
+                },
+                relayer: {
+                  formatted: fees.relayer.amountFormatted,
+                  usd: fees.relayer.amountUsd,
+                },
               },
               totalImpact: details.totalImpact,
               timeEstimateSeconds: details.timeEstimate,
               rate: details.rate,
+              ...(depositAddress ? { depositAddress } : {}),
+              ...(includeSteps ? { steps } : { stepsCount: steps.length }),
               relayAppUrl: deeplinkUrl ?? undefined,
             },
             null,
@@ -87,7 +198,8 @@ export function register(server: McpServer) {
           type: "resource_link",
           uri: deeplinkUrl,
           name: "Execute bridge on Relay",
-          description: "Open the Relay app to sign and execute this bridge",
+          description:
+            "Open the Relay app to sign and execute this bridge",
           mimeType: "text/html",
         });
         content.push({

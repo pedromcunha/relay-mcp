@@ -1,24 +1,47 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getQuote } from "../relay-api.js";
+import { resolveChainId, getChainVmType } from "../utils/chain-resolver.js";
+import { resolveTokenAddress } from "../utils/token-resolver.js";
+import {
+  validateAddress,
+  validateAmount,
+  validationError,
+} from "../utils/validators.js";
+import { mcpCatchError } from "../utils/errors.js";
+import { NATIVE_TOKEN_ADDRESSES, AMOUNT_ENCODING, CHAIN_ID_FORMAT, TRADE_TYPE_DESC } from "../utils/descriptions.js";
 
 export function register(server: McpServer) {
   server.tool(
     "estimate_fees",
-    "Estimate the fees for a bridge or swap without committing to execution. Returns a breakdown of gas fees, relayer fees, and total cost impact. Useful for comparing routes or showing users expected costs.",
+    `Estimate the fees for a specific bridge or swap route without committing to execution. Returns a breakdown of gas fees, relayer fees, and total cost impact.
+
+Use this for comparing route costs or showing users expected fees. For standalone token pricing (not route-specific), use get_token_price instead.
+
+${AMOUNT_ENCODING} ${CHAIN_ID_FORMAT}`,
     {
-      originChainId: z.number().describe("Source chain ID."),
-      destinationChainId: z.number().describe("Destination chain ID."),
+      originChainId: z.union([z.number(), z.string()]).describe("Source chain ID or name (e.g. 1, 'ethereum', 'eth')."),
+      destinationChainId: z.union([z.number(), z.string()]).describe("Destination chain ID or name (e.g. 8453, 'base')."),
       originCurrency: z
         .string()
-        .describe('Origin token address. "0x0000000000000000000000000000000000000000" for native.'),
+        .describe(`Origin token address or symbol (e.g. "USDC", "ETH"). ${NATIVE_TOKEN_ADDRESSES}`),
       destinationCurrency: z
         .string()
-        .describe('Destination token address. "0x0000000000000000000000000000000000000000" for native.'),
+        .describe(`Destination token address or symbol (e.g. "USDC", "ETH"). ${NATIVE_TOKEN_ADDRESSES}`),
       amount: z
         .string()
         .describe("Amount in the origin token's smallest unit."),
-      sender: z.string().describe("Sender wallet address."),
+      tradeType: z
+        .enum(["EXACT_INPUT", "EXPECTED_OUTPUT", "EXACT_OUTPUT"])
+        .optional()
+        .default("EXACT_INPUT")
+        .describe(TRADE_TYPE_DESC),
+      sender: z
+        .string()
+        .optional()
+        .describe(
+          "Sender wallet address. Optional — defaults to a zero address for estimation purposes."
+        ),
     },
     async ({
       originChainId,
@@ -26,16 +49,61 @@ export function register(server: McpServer) {
       originCurrency,
       destinationCurrency,
       amount,
+      tradeType,
       sender,
     }) => {
-      const quote = await getQuote({
-        user: sender,
-        originChainId,
-        destinationChainId,
-        originCurrency,
-        destinationCurrency,
-        amount,
-      });
+      const effectiveSender =
+        sender || "0x0000000000000000000000000000000000000001";
+
+      // Validate inputs
+      if (sender) {
+        const senderErr = validateAddress(sender, "sender");
+        if (senderErr) return validationError(senderErr);
+      }
+      const amtErr = validateAmount(amount);
+      if (amtErr) return validationError(amtErr);
+
+      let resolvedOrigin: number;
+      let resolvedDest: number;
+      try {
+        [resolvedOrigin, resolvedDest] = await Promise.all([
+          resolveChainId(originChainId),
+          resolveChainId(destinationChainId),
+        ]);
+      } catch (err) {
+        return mcpCatchError(err);
+      }
+
+      // Resolve token symbols → addresses if needed
+      let resolvedOriginCurrency: string;
+      let resolvedDestCurrency: string;
+      try {
+        const [originVm, destVm] = await Promise.all([
+          getChainVmType(resolvedOrigin),
+          getChainVmType(resolvedDest),
+        ]);
+        [resolvedOriginCurrency, resolvedDestCurrency] = await Promise.all([
+          resolveTokenAddress(originCurrency, resolvedOrigin, originVm),
+          resolveTokenAddress(destinationCurrency, resolvedDest, destVm),
+        ]);
+      } catch (err) {
+        return mcpCatchError(err);
+      }
+
+      let quote;
+      try {
+        quote = await getQuote({
+          user: effectiveSender,
+          originChainId: resolvedOrigin,
+          destinationChainId: resolvedDest,
+          originCurrency: resolvedOriginCurrency,
+          destinationCurrency: resolvedDestCurrency,
+          amount,
+          tradeType,
+        });
+      } catch (err) {
+        return mcpCatchError(err);
+      }
 
       const { fees, details } = quote;
 
