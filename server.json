@@ -5,7 +5,7 @@
   "title": "Relay",
   "websiteUrl": "https://relay.link",
   "repository": {
-    "url": "https://github.com/reservoirprotocol/relay-mcp",
+    "url": "https://github.com/relayprotocol/relay-mcp",
     "source": "github"
   },
   "icons": [
