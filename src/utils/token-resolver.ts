@@ -15,9 +15,6 @@ const NATIVE_ADDRESSES: Record<string, string> = {
   lvm: "0",
 };
 
-/** Symbols that map to the native gas token. */
-const NATIVE_SYMBOLS = new Set(["ETH", "NATIVE", "GAS"]);
-
 /** Chain-specific native token symbol overrides. */
 const CHAIN_NATIVE_SYMBOL: Record<number, string> = {
   56: "BNB",
@@ -59,8 +56,10 @@ const WETH: Record<number, string> = {
  * Addresses are hex (0x...), base58 (Solana), or bech32 (Bitcoin).
  */
 function looksLikeAddress(input: string): boolean {
-  // EVM hex address
-  if (/^0x[0-9a-fA-F]{8,}$/i.test(input)) return true;
+  // EVM / HypeVM hex address. Bounded at 1–64 hex chars to match
+  // validators.validateAddress; an unbounded {8,} would treat any over-long
+  // 0x string as a routable address.
+  if (/^0x[0-9a-fA-F]{1,64}$/.test(input)) return true;
   // Solana base58 (32-44 chars, no 0x prefix)
   if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(input)) return true;
   // Bitcoin bech32
@@ -96,8 +95,13 @@ export async function resolveTokenAddress(
 
   const upper = input.toUpperCase();
 
-  // Native gas token
-  if (NATIVE_SYMBOLS.has(upper) || upper === CHAIN_NATIVE_SYMBOL[chainId]) {
+  // Native gas token. "NATIVE"/"GAS" are generic aliases on any chain, but a
+  // concrete symbol is only native on the chain whose native it actually is:
+  // "ETH" is native on Ethereum, yet a bridged ERC-20 on BSC (native BNB),
+  // Polygon (MATIC), Avalanche (AVAX), etc. CHAIN_NATIVE_SYMBOL overrides the
+  // default of "ETH" for those chains.
+  const chainNative = CHAIN_NATIVE_SYMBOL[chainId] ?? "ETH";
+  if (upper === "NATIVE" || upper === "GAS" || upper === chainNative) {
     const nativeAddr = vmType
       ? NATIVE_ADDRESSES[vmType.toLowerCase()]
       : NATIVE_ADDRESSES["evm"]; // default EVM
